@@ -1,0 +1,2 @@
+# Patternsy
+Simple pattern generator
