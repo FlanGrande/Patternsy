@@ -1,226 +1,282 @@
 #!/usr/bin/env python3
 
 import os
-import tkinter as tk
-from tkinter import ttk, colorchooser, filedialog, messagebox
-from PIL import Image, ImageTk
-import threading
+import sys
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                            QLabel, QSpinBox, QComboBox, QPushButton, QFileDialog, 
+                            QSlider, QLineEdit, QGroupBox, QGridLayout, QMessageBox,
+                            QScrollArea, QColorDialog)
+from PyQt6.QtGui import QPixmap, QImage, QColor
+from PyQt6.QtCore import Qt
+from PIL import Image, ImageQt
 import time
 from patternsy import create_pattern
 
-class PatternGeneratorApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Patternsy - Pattern Generator")
-        self.root.geometry("1200x800")
-        self.root.minsize(900, 700)
+class PatternGeneratorApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
         
         # Default values
-        self.width = tk.IntVar(value=800)
-        self.height = tk.IntVar(value=800)
-        self.base_scale = tk.IntVar(value=32)
-        self.spacing = tk.IntVar(value=128)
-        self.pattern_type = tk.StringVar(value="offset_grid")
-        self.shape_type = tk.StringVar(value="circle")
-        self.custom_image_path = tk.StringVar(value="")
+        self.width = 1024  # Changed from 800 to 1024
+        self.height = 1024  # Changed from 800 to 1024
+        self.base_scale = 32
+        self.spacing = 128
+        self.pattern_type = "offset_grid"
+        self.shape_type = "circle"
+        self.custom_image_path = ""
         self.bg_color = (0, 0, 0, 255)
-        self.fg_color = (255, 0, 0, 255)
-        self.scale_randomization = tk.DoubleVar(value=0.0)
-        self.base_rotation = tk.DoubleVar(value=0.0)
-        self.rotation_randomization = tk.DoubleVar(value=0.0)
-        self.output_file = tk.StringVar(value="pattern.png")
+        self.fg_color = (255, 136, 0, 255)  # Changed from (255, 0, 0, 255) to #FF8800
+        self.scale_randomization = 0.0
+        self.base_rotation = 0.0
+        self.rotation_randomization = 0.0
+        self.output_file = "pattern.png"
         
         # Preview settings
         self.preview_img = None
-        self.preview_scale = 0.25  # Scale for preview image
-        self.preview_thread = None
-        self.is_preview_running = False
+        self.preview_scale = 0.25
         
-        # Create the UI
-        self.create_ui()
+        # Initialize UI
+        self.setWindowTitle("Patternsy - Pattern Generator (PyQt6)")
+        self.setMinimumSize(900, 700)
+        self.resize(1200, 800)
         
-        # Generate initial preview
-        self.schedule_preview_update()
+        self.init_ui()
+        self.update_preview()
         
-    def create_ui(self):
-        # Create main frame with padding
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+    def init_ui(self):
+        # Main widget
+        main_widget = QWidget()
+        self.setCentralWidget(main_widget)
         
-        # Create left panel for controls
-        controls_frame = ttk.LabelFrame(main_frame, text="Settings", padding="10")
-        controls_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        # Main layout
+        main_layout = QHBoxLayout(main_widget)
         
-        # Create right panel for preview and output
-        preview_frame = ttk.LabelFrame(main_frame, text="Preview", padding="10")
-        preview_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        # === Left panel for controls ===
+        controls_scroll = QScrollArea()
+        controls_scroll.setWidgetResizable(True)
+        controls_scroll.setMinimumWidth(450)
+        controls_scroll.setMaximumWidth(400)
         
-        # === Controls ===
-        # Size controls
-        size_frame = ttk.LabelFrame(controls_frame, text="Dimensions", padding="5")
-        size_frame.pack(fill=tk.X, pady=(0, 10))
+        controls_widget = QWidget()
+        controls_layout = QVBoxLayout(controls_widget)
+        controls_scroll.setWidget(controls_widget)
         
-        ttk.Label(size_frame, text="Width:").grid(row=0, column=0, sticky=tk.W, pady=2)
-        ttk.Spinbox(size_frame, from_=100, to=8192, textvariable=self.width, width=6,
-                   command=self.schedule_preview_update).grid(row=0, column=1, sticky=tk.W, pady=2)
+        # === Size controls ===
+        size_group = QGroupBox("Dimensions")
+        size_layout = QGridLayout(size_group)
         
-        ttk.Label(size_frame, text="Height:").grid(row=1, column=0, sticky=tk.W, pady=2)
-        ttk.Spinbox(size_frame, from_=100, to=8192, textvariable=self.height, width=6,
-                   command=self.schedule_preview_update).grid(row=1, column=1, sticky=tk.W, pady=2)
+        size_layout.addWidget(QLabel("Width:"), 0, 0)
+        self.width_spin = QSpinBox()
+        self.width_spin.setRange(100, 8192)
+        self.width_spin.setValue(self.width)
+        self.width_spin.valueChanged.connect(self.schedule_preview_update)
+        size_layout.addWidget(self.width_spin, 0, 1)
         
-        # Shape controls
-        shape_frame = ttk.LabelFrame(controls_frame, text="Shape Settings", padding="5")
-        shape_frame.pack(fill=tk.X, pady=(0, 10))
+        size_layout.addWidget(QLabel("Height:"), 1, 0)
+        self.height_spin = QSpinBox()
+        self.height_spin.setRange(100, 8192)
+        self.height_spin.setValue(self.height)
+        self.height_spin.valueChanged.connect(self.schedule_preview_update)
+        size_layout.addWidget(self.height_spin, 1, 1)
         
-        ttk.Label(shape_frame, text="Shape Type:").grid(row=0, column=0, sticky=tk.W, pady=2)
-        shape_types = ["circle", "square", "triangle", "star", "custom"]
-        shape_dropdown = ttk.Combobox(shape_frame, textvariable=self.shape_type, values=shape_types, state="readonly", width=10)
-        shape_dropdown.grid(row=0, column=1, sticky=tk.W, pady=2)
-        shape_dropdown.bind("<<ComboboxSelected>>", lambda e: self.schedule_preview_update())
+        controls_layout.addWidget(size_group)
         
-        ttk.Label(shape_frame, text="Base Scale:").grid(row=1, column=0, sticky=tk.W, pady=2)
-        ttk.Spinbox(shape_frame, from_=4, to=1000, textvariable=self.base_scale, width=6,
-                   command=self.schedule_preview_update).grid(row=1, column=1, sticky=tk.W, pady=2)
+        # === Shape controls ===
+        shape_group = QGroupBox("Shape Settings")
+        shape_layout = QGridLayout(shape_group)
         
-        ttk.Label(shape_frame, text="Spacing:").grid(row=2, column=0, sticky=tk.W, pady=2)
-        ttk.Spinbox(shape_frame, from_=10, to=1000, textvariable=self.spacing, width=6,
-                   command=self.schedule_preview_update).grid(row=2, column=1, sticky=tk.W, pady=2)
+        shape_layout.addWidget(QLabel("Shape Type:"), 0, 0)
+        self.shape_combo = QComboBox()
+        self.shape_combo.addItems(["circle", "square", "triangle", "star", "custom"])
+        self.shape_combo.setCurrentText(self.shape_type)
+        self.shape_combo.currentTextChanged.connect(self.on_shape_changed)
+        shape_layout.addWidget(self.shape_combo, 0, 1)
         
-        custom_img_button = ttk.Button(shape_frame, text="Custom Image...", command=self.select_custom_image)
-        custom_img_button.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=2)
+        shape_layout.addWidget(QLabel("Base Scale:"), 1, 0)
+        self.scale_spin = QSpinBox()
+        self.scale_spin.setRange(4, 1000)
+        self.scale_spin.setValue(self.base_scale)
+        self.scale_spin.valueChanged.connect(self.schedule_preview_update)
+        shape_layout.addWidget(self.scale_spin, 1, 1)
         
-        # Pattern type controls
-        pattern_frame = ttk.LabelFrame(controls_frame, text="Pattern Settings", padding="5")
-        pattern_frame.pack(fill=tk.X, pady=(0, 10))
+        shape_layout.addWidget(QLabel("Spacing:"), 2, 0)
+        self.spacing_spin = QSpinBox()
+        self.spacing_spin.setRange(10, 1000)
+        self.spacing_spin.setValue(self.spacing)
+        self.spacing_spin.valueChanged.connect(self.schedule_preview_update)
+        shape_layout.addWidget(self.spacing_spin, 2, 1)
         
-        ttk.Label(pattern_frame, text="Pattern Type:").grid(row=0, column=0, sticky=tk.W, pady=2)
-        pattern_types = ["grid", "offset_grid", "random", "spiral"]
-        pattern_dropdown = ttk.Combobox(pattern_frame, textvariable=self.pattern_type, values=pattern_types, state="readonly", width=10)
-        pattern_dropdown.grid(row=0, column=1, sticky=tk.W, pady=2)
-        pattern_dropdown.bind("<<ComboboxSelected>>", lambda e: self.schedule_preview_update())
+        self.custom_img_btn = QPushButton("Custom Image...")
+        self.custom_img_btn.clicked.connect(self.select_custom_image)
+        shape_layout.addWidget(self.custom_img_btn, 3, 0, 1, 2)
         
-        # Randomization controls
-        random_frame = ttk.LabelFrame(controls_frame, text="Randomization", padding="5")
-        random_frame.pack(fill=tk.X, pady=(0, 10))
+        controls_layout.addWidget(shape_group)
         
-        ttk.Label(random_frame, text="Scale Random:").grid(row=0, column=0, sticky=tk.W, pady=2)
-        ttk.Scale(random_frame, from_=0, to=1, variable=self.scale_randomization, orient=tk.HORIZONTAL,
-                 command=lambda e: self.schedule_preview_update()).grid(row=0, column=1, sticky=tk.EW, pady=2)
+        # === Pattern type controls ===
+        pattern_group = QGroupBox("Pattern Settings")
+        pattern_layout = QGridLayout(pattern_group)
         
-        ttk.Label(random_frame, text="Base Rotation:").grid(row=1, column=0, sticky=tk.W, pady=2)
-        ttk.Scale(random_frame, from_=0, to=360, variable=self.base_rotation, orient=tk.HORIZONTAL,
-                 command=lambda e: self.schedule_preview_update()).grid(row=1, column=1, sticky=tk.EW, pady=2)
+        pattern_layout.addWidget(QLabel("Pattern Type:"), 0, 0)
+        self.pattern_combo = QComboBox()
+        self.pattern_combo.addItems(["grid", "offset_grid", "random", "spiral"])
+        self.pattern_combo.setCurrentText(self.pattern_type)
+        self.pattern_combo.currentTextChanged.connect(self.on_pattern_changed)
+        pattern_layout.addWidget(self.pattern_combo, 0, 1)
         
-        ttk.Label(random_frame, text="Rotation Random:").grid(row=2, column=0, sticky=tk.W, pady=2)
-        ttk.Scale(random_frame, from_=0, to=1, variable=self.rotation_randomization, orient=tk.HORIZONTAL,
-                 command=lambda e: self.schedule_preview_update()).grid(row=2, column=1, sticky=tk.EW, pady=2)
+        controls_layout.addWidget(pattern_group)
         
-        # Color controls
-        color_frame = ttk.LabelFrame(controls_frame, text="Colors", padding="5")
-        color_frame.pack(fill=tk.X, pady=(0, 10))
+        # === Randomization controls ===
+        random_group = QGroupBox("Randomization")
+        random_layout = QGridLayout(random_group)
         
-        self.bg_color_button = ttk.Button(color_frame, text="Background Color", command=self.select_bg_color)
-        self.bg_color_button.grid(row=0, column=0, columnspan=2, sticky=tk.EW, pady=2)
+        random_layout.addWidget(QLabel("Scale Random:"), 0, 0)
+        self.scale_random_slider = QSlider(Qt.Orientation.Horizontal)
+        self.scale_random_slider.setRange(0, 100)
+        self.scale_random_slider.setValue(int(self.scale_randomization * 100))
+        self.scale_random_slider.sliderReleased.connect(self.on_scale_random_changed)
+        random_layout.addWidget(self.scale_random_slider, 0, 1)
         
-        self.fg_color_button = ttk.Button(color_frame, text="Foreground Color", command=self.select_fg_color)
-        self.fg_color_button.grid(row=1, column=0, columnspan=2, sticky=tk.EW, pady=2)
+        random_layout.addWidget(QLabel("Base Rotation:"), 1, 0)
+        self.rotation_slider = QSlider(Qt.Orientation.Horizontal)
+        self.rotation_slider.setRange(0, 360)
+        self.rotation_slider.setValue(int(self.base_rotation))
+        self.rotation_slider.sliderReleased.connect(self.on_rotation_changed)
+        random_layout.addWidget(self.rotation_slider, 1, 1)
         
-        # Update button colors to match current selections
-        self.update_color_buttons()
+        random_layout.addWidget(QLabel("Rotation Random:"), 2, 0)
+        self.rotation_random_slider = QSlider(Qt.Orientation.Horizontal)
+        self.rotation_random_slider.setRange(0, 100)
+        self.rotation_random_slider.setValue(int(self.rotation_randomization * 100))
+        self.rotation_random_slider.sliderReleased.connect(self.on_rotation_random_changed)
+        random_layout.addWidget(self.rotation_random_slider, 2, 1)
         
-        # Output controls
-        output_frame = ttk.LabelFrame(controls_frame, text="Output", padding="5")
-        output_frame.pack(fill=tk.X, pady=(0, 10))
+        controls_layout.addWidget(random_group)
         
-        ttk.Label(output_frame, text="Filename:").grid(row=0, column=0, sticky=tk.W, pady=2)
-        ttk.Entry(output_frame, textvariable=self.output_file, width=15).grid(row=0, column=1, sticky=tk.EW, pady=2)
+        # === Color controls ===
+        color_group = QGroupBox("Colors")
+        color_layout = QVBoxLayout(color_group)
+        
+        self.bg_color_btn = QPushButton(f"Background: #{self.bg_color[0]:02x}{self.bg_color[1]:02x}{self.bg_color[2]:02x}")
+        self.bg_color_btn.clicked.connect(self.select_bg_color)
+        color_layout.addWidget(self.bg_color_btn)
+        
+        self.fg_color_btn = QPushButton(f"Foreground: #{self.fg_color[0]:02x}{self.fg_color[1]:02x}{self.fg_color[2]:02x}")
+        self.fg_color_btn.clicked.connect(self.select_fg_color)
+        color_layout.addWidget(self.fg_color_btn)
+        
+        controls_layout.addWidget(color_group)
+        
+        # === Output controls ===
+        output_group = QGroupBox("Output")
+        output_layout = QGridLayout(output_group)
+        
+        output_layout.addWidget(QLabel("Filename:"), 0, 0)
+        self.output_edit = QLineEdit(self.output_file)
+        output_layout.addWidget(self.output_edit, 0, 1)
+        
+        controls_layout.addWidget(output_group)
         
         # Generate button
-        generate_button = ttk.Button(controls_frame, text="Generate Pattern", command=self.generate_pattern)
-        generate_button.pack(fill=tk.X, pady=(10, 0))
+        self.generate_btn = QPushButton("Generate Pattern")
+        self.generate_btn.clicked.connect(self.generate_pattern)
+        controls_layout.addWidget(self.generate_btn)
         
-        # === Preview ===
-        self.preview_canvas = tk.Canvas(preview_frame, bg="lightgrey")
-        self.preview_canvas.pack(fill=tk.BOTH, expand=True)
+        # Add some stretch at the end
+        controls_layout.addStretch()
         
-    def update_color_buttons(self):
-        """Update color buttons with visual indicators of selected colors"""
-        # Create a style for each color button
-        bg_color_rgb = f'#{self.bg_color[0]:02x}{self.bg_color[1]:02x}{self.bg_color[2]:02x}'
-        fg_color_rgb = f'#{self.fg_color[0]:02x}{self.fg_color[1]:02x}{self.fg_color[2]:02x}'
+        # === Preview area ===
+        preview_group = QGroupBox("Preview")
+        preview_layout = QVBoxLayout(preview_group)
         
-        self.bg_color_button.configure(text=f"Background: {bg_color_rgb}")
-        self.fg_color_button.configure(text=f"Foreground: {fg_color_rgb}")
+        self.preview_label = QLabel()
+        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview_label.setMinimumSize(400, 400)
+        self.preview_label.setStyleSheet("background-color: lightgrey;")
+        preview_layout.addWidget(self.preview_label)
+        
+        # Add controls scroll and preview to main layout
+        main_layout.addWidget(controls_scroll)
+        main_layout.addWidget(preview_group, 1)  # Preview takes more space
+    
+    # === Event handlers ===
+    def on_shape_changed(self, text):
+        self.shape_type = text
+        
+        # If custom is selected and no image is loaded, prompt to select one
+        if text == "custom" and not self.custom_image_path:
+            self.select_custom_image()
+        else:
+            self.schedule_preview_update()
+    
+    def on_pattern_changed(self, text):
+        self.pattern_type = text
+        self.schedule_preview_update()
+    
+    def on_scale_random_changed(self):
+        self.scale_randomization = self.scale_random_slider.value() / 100.0
+        self.schedule_preview_update()
+    
+    def on_rotation_changed(self):
+        self.base_rotation = self.rotation_slider.value()
+        self.schedule_preview_update()
+    
+    def on_rotation_random_changed(self):
+        self.rotation_randomization = self.rotation_random_slider.value() / 100.0
+        self.schedule_preview_update()
     
     def select_bg_color(self):
-        """Open color chooser for background color"""
-        color = colorchooser.askcolor(
-            title="Select Background Color",
-            initialcolor=f'#{self.bg_color[0]:02x}{self.bg_color[1]:02x}{self.bg_color[2]:02x}'
-        )
-        if color[1]:  # If a color was selected (not canceled)
-            r, g, b = [int(x) for x in color[0]]
-            self.bg_color = (r, g, b, 255)
-            self.update_color_buttons()
+        color = QColor(self.bg_color[0], self.bg_color[1], self.bg_color[2])
+        color = QColorDialog.getColor(color, self, "Select Background Color")
+        
+        if color.isValid():
+            self.bg_color = (color.red(), color.green(), color.blue(), 255)
+            self.bg_color_btn.setText(f"Background: #{self.bg_color[0]:02x}{self.bg_color[1]:02x}{self.bg_color[2]:02x}")
             self.schedule_preview_update()
     
     def select_fg_color(self):
-        """Open color chooser for foreground color"""
-        color = colorchooser.askcolor(
-            title="Select Foreground Color",
-            initialcolor=f'#{self.fg_color[0]:02x}{self.fg_color[1]:02x}{self.fg_color[2]:02x}'
-        )
-        if color[1]:  # If a color was selected (not canceled)
-            r, g, b = [int(x) for x in color[0]]
-            self.fg_color = (r, g, b, 255)
-            self.update_color_buttons()
+        color = QColor(self.fg_color[0], self.fg_color[1], self.fg_color[2])
+        color = QColorDialog.getColor(color, self, "Select Foreground Color")
+        
+        if color.isValid():
+            self.fg_color = (color.red(), color.green(), color.blue(), 255)
+            self.fg_color_btn.setText(f"Foreground: #{self.fg_color[0]:02x}{self.fg_color[1]:02x}{self.fg_color[2]:02x}")
             self.schedule_preview_update()
     
     def select_custom_image(self):
-        """Allow user to select a custom image file"""
-        file_path = filedialog.askopenfilename(
-            title="Select Custom Image",
-            filetypes=[
-                ("Image files", "*.png *.jpg *.jpeg *.gif *.bmp"),
-                ("All files", "*.*")
-            ]
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Custom Image",
+            "",
+            "Image files (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;All files (*.*)"
         )
+        
         if file_path:
-            self.custom_image_path.set(file_path)
-            # Automatically switch to custom shape type
-            self.shape_type.set("custom")
+            self.custom_image_path = file_path
+            self.shape_combo.setCurrentText("custom")
             self.schedule_preview_update()
     
-    def schedule_preview_update(self, *args):
-        """Schedule a preview update with debouncing"""
-        if self.preview_thread is not None and self.preview_thread.is_alive():
-            self.is_preview_running = False
-            self.preview_thread.join(timeout=0.1)
+    def schedule_preview_update(self):
+        # Get current values from UI
+        self.width = self.width_spin.value()
+        self.height = self.height_spin.value()
+        self.base_scale = self.scale_spin.value()
+        self.spacing = self.spacing_spin.value()
+        self.output_file = self.output_edit.text()
         
-        self.is_preview_running = True
-        self.preview_thread = threading.Thread(target=self.update_preview)
-        self.preview_thread.daemon = True
-        self.preview_thread.start()
+        self.update_preview()
     
     def update_preview(self):
-        """Update the preview image in a separate thread"""
-        # Small delay for debouncing
-        time.sleep(0.2)
-        
-        if not self.is_preview_running:
-            return
-        
         try:
             # Create a temporary file for the preview
             temp_output = "preview_temp.png"
             
             # Calculate preview dimensions
-            preview_width = max(200, int(self.width.get() * self.preview_scale))
-            preview_height = max(200, int(self.height.get() * self.preview_scale))
+            preview_width = max(200, int(self.width * self.preview_scale))
+            preview_height = max(200, int(self.height * self.preview_scale))
             
             # Scale down other parameters proportionally for faster preview
-            preview_base_scale = max(4, int(self.base_scale.get() * self.preview_scale))
-            preview_spacing = max(10, int(self.spacing.get() * self.preview_scale))
+            preview_base_scale = max(4, int(self.base_scale * self.preview_scale))
+            preview_spacing = max(10, int(self.spacing * self.preview_scale))
             
             # Generate the preview pattern
             create_pattern(
@@ -228,23 +284,21 @@ class PatternGeneratorApp:
                 height=preview_height,
                 base_scale=preview_base_scale,
                 spacing=preview_spacing,
-                pattern_type=self.pattern_type.get(),
-                shape_type=self.shape_type.get(),
-                custom_image_path=self.custom_image_path.get() if self.shape_type.get() == "custom" else None,
+                pattern_type=self.pattern_type,
+                shape_type=self.shape_type,
+                custom_image_path=self.custom_image_path if self.shape_type == "custom" else None,
                 bg_color=self.bg_color,
                 fg_color=self.fg_color,
-                scale_randomization=self.scale_randomization.get(),
-                base_rotation=self.base_rotation.get(),
-                rotation_randomization=self.rotation_randomization.get(),
+                scale_randomization=self.scale_randomization,
+                base_rotation=self.base_rotation,
+                rotation_randomization=self.rotation_randomization,
                 output_file=temp_output
             )
             
             # Load the preview image
-            img = Image.open(temp_output)
-            self.preview_img = ImageTk.PhotoImage(img)
-            
-            # Update the canvas with the new image
-            self.root.after(0, self.display_preview, img.width, img.height)
+            img = QPixmap(temp_output)
+            self.preview_label.setPixmap(img)
+            self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             
             # Try to remove the temporary file
             try:
@@ -254,32 +308,12 @@ class PatternGeneratorApp:
                 pass
                 
         except Exception as e:
-            self.root.after(0, lambda: messagebox.showerror("Preview Error", f"Error generating preview: {str(e)}"))
-    
-    def display_preview(self, width, height):
-        """Display the preview image on the canvas"""
-        if not self.preview_img:
-            return
-            
-        # Clear the canvas
-        self.preview_canvas.delete("all")
-        
-        # Get canvas dimensions
-        canvas_width = self.preview_canvas.winfo_width()
-        canvas_height = self.preview_canvas.winfo_height()
-        
-        # Calculate the position to center the image
-        x = max(0, (canvas_width - width) // 2)
-        y = max(0, (canvas_height - height) // 2)
-        
-        # Draw the image on the canvas
-        self.preview_canvas.create_image(x, y, anchor=tk.NW, image=self.preview_img)
+            QMessageBox.critical(self, "Preview Error", f"Error generating preview: {str(e)}")
     
     def generate_pattern(self):
-        """Generate the full-resolution pattern and save it"""
         try:
             # Get the output filename
-            output_file = self.output_file.get()
+            output_file = self.output_edit.text()
             if not output_file:
                 output_file = "pattern.png"
             
@@ -288,75 +322,34 @@ class PatternGeneratorApp:
                 output_file += '.png'
             
             # Show a progress message
-            progress_window = tk.Toplevel(self.root)
-            progress_window.title("Generating...")
-            progress_window.geometry("300x100")
-            progress_window.resizable(False, False)
-            progress_window.transient(self.root)
-            progress_window.grab_set()
+            QMessageBox.information(self, "Generating", "Generating pattern. This might take a moment...")
             
-            # Center the progress window
-            progress_window.update_idletasks()
-            x = self.root.winfo_x() + (self.root.winfo_width() - progress_window.winfo_width()) // 2
-            y = self.root.winfo_y() + (self.root.winfo_height() - progress_window.winfo_height()) // 2
-            progress_window.geometry(f"+{x}+{y}")
+            # Generate the pattern
+            create_pattern(
+                width=self.width,
+                height=self.height,
+                base_scale=self.base_scale,
+                spacing=self.spacing,
+                pattern_type=self.pattern_type,
+                shape_type=self.shape_type,
+                custom_image_path=self.custom_image_path if self.shape_type == "custom" else None,
+                bg_color=self.bg_color,
+                fg_color=self.fg_color,
+                scale_randomization=self.scale_randomization,
+                base_rotation=self.base_rotation,
+                rotation_randomization=self.rotation_randomization,
+                output_file=output_file
+            )
             
-            ttk.Label(progress_window, text="Generating pattern...", padding="10").pack()
-            progress = ttk.Progressbar(progress_window, mode="indeterminate")
-            progress.pack(fill=tk.X, padx=20, pady=10)
-            progress.start()
-            
-            # Create a thread to generate the pattern
-            def generate_thread():
-                try:
-                    create_pattern(
-                        width=self.width.get(),
-                        height=self.height.get(),
-                        base_scale=self.base_scale.get(),
-                        spacing=self.spacing.get(),
-                        pattern_type=self.pattern_type.get(),
-                        shape_type=self.shape_type.get(),
-                        custom_image_path=self.custom_image_path.get() if self.shape_type.get() == "custom" else None,
-                        bg_color=self.bg_color,
-                        fg_color=self.fg_color,
-                        scale_randomization=self.scale_randomization.get(),
-                        base_rotation=self.base_rotation.get(),
-                        rotation_randomization=self.rotation_randomization.get(),
-                        output_file=output_file
-                    )
-                    
-                    # Close the progress window and show success message
-                    self.root.after(0, lambda: [
-                        progress_window.destroy(),
-                        messagebox.showinfo("Success", f"Pattern generated and saved as '{output_file}'.")
-                    ])
-                    
-                except Exception as e:
-                    # Close the progress window and show error message
-                    self.root.after(0, lambda: [
-                        progress_window.destroy(),
-                        messagebox.showerror("Error", f"Error generating pattern: {str(e)}")
-                    ])
-            
-            # Start the generation thread
-            thread = threading.Thread(target=generate_thread)
-            thread.daemon = True
-            thread.start()
+            # Show success message
+            QMessageBox.information(self, "Success", f"Pattern generated and saved as '{output_file}'.")
             
         except Exception as e:
-            messagebox.showerror("Error", f"Error generating pattern: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Error generating pattern: {str(e)}")
 
 # Main execution
 if __name__ == "__main__":
-    root = tk.Tk()
-    
-    # Set a theme that works well across platforms
-    try:
-        style = ttk.Style()
-        if 'clam' in style.theme_names():
-            style.theme_use('clam')
-    except:
-        pass  # If theme setting fails, use default
-    
-    app = PatternGeneratorApp(root)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    window = PatternGeneratorApp()
+    window.show()
+    sys.exit(app.exec()) 
