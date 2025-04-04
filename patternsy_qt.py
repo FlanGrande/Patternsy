@@ -5,7 +5,7 @@ import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                             QLabel, QSpinBox, QComboBox, QPushButton, QFileDialog, 
                             QSlider, QLineEdit, QGroupBox, QGridLayout, QMessageBox,
-                            QScrollArea)
+                            QScrollArea, QColorDialog)
 from PyQt6.QtGui import QPixmap, QImage, QColor
 from PyQt6.QtCore import Qt
 from PIL import Image, ImageQt
@@ -17,15 +17,15 @@ class PatternGeneratorApp(QMainWindow):
         super().__init__()
         
         # Default values
-        self.width = 800
-        self.height = 800
+        self.width = 1024  # Changed from 800 to 1024
+        self.height = 1024  # Changed from 800 to 1024
         self.base_scale = 32
         self.spacing = 128
         self.pattern_type = "offset_grid"
         self.shape_type = "circle"
         self.custom_image_path = ""
         self.bg_color = (0, 0, 0, 255)
-        self.fg_color = (255, 0, 0, 255)
+        self.fg_color = (255, 136, 0, 255)  # Changed from (255, 0, 0, 255) to #FF8800
         self.scale_randomization = 0.0
         self.base_rotation = 0.0
         self.rotation_randomization = 0.0
@@ -133,21 +133,21 @@ class PatternGeneratorApp(QMainWindow):
         self.scale_random_slider = QSlider(Qt.Orientation.Horizontal)
         self.scale_random_slider.setRange(0, 100)
         self.scale_random_slider.setValue(int(self.scale_randomization * 100))
-        self.scale_random_slider.valueChanged.connect(self.on_scale_random_changed)
+        self.scale_random_slider.sliderReleased.connect(self.on_scale_random_changed)
         random_layout.addWidget(self.scale_random_slider, 0, 1)
         
         random_layout.addWidget(QLabel("Base Rotation:"), 1, 0)
         self.rotation_slider = QSlider(Qt.Orientation.Horizontal)
         self.rotation_slider.setRange(0, 360)
         self.rotation_slider.setValue(int(self.base_rotation))
-        self.rotation_slider.valueChanged.connect(self.on_rotation_changed)
+        self.rotation_slider.sliderReleased.connect(self.on_rotation_changed)
         random_layout.addWidget(self.rotation_slider, 1, 1)
         
         random_layout.addWidget(QLabel("Rotation Random:"), 2, 0)
         self.rotation_random_slider = QSlider(Qt.Orientation.Horizontal)
         self.rotation_random_slider.setRange(0, 100)
         self.rotation_random_slider.setValue(int(self.rotation_randomization * 100))
-        self.rotation_random_slider.valueChanged.connect(self.on_rotation_random_changed)
+        self.rotation_random_slider.sliderReleased.connect(self.on_rotation_random_changed)
         random_layout.addWidget(self.rotation_random_slider, 2, 1)
         
         controls_layout.addWidget(random_group)
@@ -201,22 +201,27 @@ class PatternGeneratorApp(QMainWindow):
     # === Event handlers ===
     def on_shape_changed(self, text):
         self.shape_type = text
-        self.schedule_preview_update()
+        
+        # If custom is selected and no image is loaded, prompt to select one
+        if text == "custom" and not self.custom_image_path:
+            self.select_custom_image()
+        else:
+            self.schedule_preview_update()
     
     def on_pattern_changed(self, text):
         self.pattern_type = text
         self.schedule_preview_update()
     
-    def on_scale_random_changed(self, value):
-        self.scale_randomization = value / 100.0
+    def on_scale_random_changed(self):
+        self.scale_randomization = self.scale_random_slider.value() / 100.0
         self.schedule_preview_update()
     
-    def on_rotation_changed(self, value):
-        self.base_rotation = float(value)
+    def on_rotation_changed(self):
+        self.base_rotation = self.rotation_slider.value()
         self.schedule_preview_update()
     
-    def on_rotation_random_changed(self, value):
-        self.rotation_randomization = value / 100.0
+    def on_rotation_random_changed(self):
+        self.rotation_randomization = self.rotation_random_slider.value() / 100.0
         self.schedule_preview_update()
     
     def select_bg_color(self):
@@ -242,7 +247,7 @@ class PatternGeneratorApp(QMainWindow):
             self,
             "Select Custom Image",
             "",
-            "Image files (*.png *.jpg *.jpeg *.gif *.bmp, *.webp);;All files (*.*)"
+            "Image files (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;All files (*.*)"
         )
         
         if file_path:
@@ -341,9 +346,6 @@ class PatternGeneratorApp(QMainWindow):
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error generating pattern: {str(e)}")
-
-# Need to add QColorDialog import that was missed earlier
-from PyQt6.QtWidgets import QColorDialog
 
 # Main execution
 if __name__ == "__main__":
