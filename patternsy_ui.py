@@ -5,9 +5,9 @@ import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                             QLabel, QSpinBox, QComboBox, QPushButton, QFileDialog, 
                             QSlider, QLineEdit, QGroupBox, QGridLayout, QMessageBox,
-                            QScrollArea, QColorDialog)
-from PyQt6.QtGui import QPixmap, QImage, QColor, QMouseEvent, QWheelEvent, QKeyEvent, QPainter
-from PyQt6.QtCore import Qt, QPoint
+                            QScrollArea, QColorDialog, QToolButton)
+from PyQt6.QtGui import QPixmap, QImage, QColor, QMouseEvent, QWheelEvent, QKeyEvent, QPainter, QIcon
+from PyQt6.QtCore import Qt, QPoint, QSize
 from PIL import Image, ImageQt
 import time
 from patternsy import create_pattern
@@ -301,6 +301,36 @@ class PatternGeneratorApp(QMainWindow):
         # === Preview area ===
         preview_group = QGroupBox("Preview")
         preview_layout = QVBoxLayout(preview_group)
+        
+        # Add info button for controls help
+        preview_header = QHBoxLayout()
+        preview_layout.addLayout(preview_header)
+        
+        preview_header.addStretch()
+        
+        info_button = QToolButton()
+        info_button.setText("i")
+        info_button.setToolTip("""
+            <b>Zoom In:</b> Mouse wheel up or '+' key<br>
+            <b>Zoom Out:</b> Mouse wheel down or '-' key<br>
+            <b>Pan:</b> Click and drag with left mouse button<br>
+            <b>Reset View:</b> 'R' key
+        """)
+        info_button.setFixedSize(24, 24)
+        info_button.setStyleSheet("""
+            QToolButton {
+                border: 1px solid gray;
+                border-radius: 12px;
+                background-color: #ff8800;
+                color: #000000;
+                font-family: "Segoe UI", Arial, sans-serif;
+                font-size: 16px;
+            }
+            QToolButton:hover {
+                background-color: #e0e0e0;
+            }
+        """)
+        preview_header.addWidget(info_button)
         
         self.preview_label = ZoomablePreviewLabel()
         preview_layout.addWidget(self.preview_label)
