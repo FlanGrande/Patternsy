@@ -18,8 +18,7 @@ def create_pattern(
         scale_randomization=0.0,
         base_rotation=0.0,
         rotation_randomization=0.0,
-        output_file="pattern.png",
-        aa_factor=4  # Anti-aliasing factor
+        output_file="pattern.png"
 ):
     """
     Create a pattern with various shapes and arrangements.
@@ -37,7 +36,6 @@ def create_pattern(
     - base_rotation: base rotation for all shapes in degrees
     - rotation_randomization: random variation in rotation (0.0-1.0)
     - output_file: filename for the output image
-    - aa_factor: anti-aliasing factor
     """
     
     # Create a new image with the specified background color
@@ -69,7 +67,7 @@ def create_pattern(
         # Draw the shape
         shape_img = create_shape(
             shape_type, current_scale, fg_color, current_rotation, 
-            custom_image_path, aa_factor
+            custom_image_path
         )
         
         # Calculate paste position (centered on the coordinate)
@@ -151,37 +149,34 @@ def generate_pattern_coordinates(width, height, spacing, pattern_type):
     
     return coordinates
 
-def create_shape(shape_type, scale, color, rotation, custom_image_path, aa_factor):
+def create_shape(shape_type, scale, color, rotation, custom_image_path):
     """Create a shape image based on the specified shape type."""
-    # Size with anti-aliasing factor applied
-    aa_size = scale * aa_factor
-    
     # Create a transparent image for the shape
-    temp_img = Image.new("RGBA", (aa_size, aa_size), (0, 0, 0, 0))
-    temp_draw = ImageDraw.Draw(temp_img)
+    shape_img = Image.new("RGBA", (scale, scale), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(shape_img)
     
     if shape_type == "circle":
         # Draw a circle
-        temp_draw.ellipse([0, 0, aa_size - 1, aa_size - 1], fill=color)
+        draw.ellipse([0, 0, scale - 1, scale - 1], fill=color)
         
     elif shape_type == "square":
         # Draw a square
-        temp_draw.rectangle([0, 0, aa_size - 1, aa_size - 1], fill=color)
+        draw.rectangle([0, 0, scale - 1, scale - 1], fill=color)
         
     elif shape_type == "triangle":
         # Draw a triangle (pointing up)
         points = [
-            (aa_size // 2, 0),  # Top
-            (0, aa_size - 1),   # Bottom left
-            (aa_size - 1, aa_size - 1)  # Bottom right
+            (scale // 2, 0),       # Top
+            (0, scale - 1),        # Bottom left
+            (scale - 1, scale - 1)  # Bottom right
         ]
-        temp_draw.polygon(points, fill=color)
+        draw.polygon(points, fill=color)
         
     elif shape_type == "star":
         # Draw a five-pointed star
         points = []
-        center = aa_size // 2
-        outer_radius = aa_size // 2
+        center = scale // 2
+        outer_radius = scale // 2
         inner_radius = outer_radius // 2
         
         for i in range(10):
@@ -192,33 +187,30 @@ def create_shape(shape_type, scale, color, rotation, custom_image_path, aa_facto
             y = center + radius * math.sin(angle)
             points.append((x, y))
             
-        temp_draw.polygon(points, fill=color)
+        draw.polygon(points, fill=color)
         
     elif shape_type == "custom" and custom_image_path and os.path.exists(custom_image_path):
         # Use a custom image
         try:
             # Load the custom image
             custom_img = Image.open(custom_image_path).convert("RGBA")
-            # Resize to match our anti-aliased size
-            custom_img = custom_img.resize((aa_size, aa_size), Image.LANCZOS)
-            # Replace temp_img with the custom image
-            temp_img = custom_img
+            # Resize to match our size
+            custom_img = custom_img.resize((scale, scale), Image.LANCZOS)
+            # Replace shape_img with the custom image
+            shape_img = custom_img
         except Exception as e:
             print(f"Error loading custom image: {e}")
             # Fallback to a circle if the custom image fails
-            temp_draw.ellipse([0, 0, aa_size - 1, aa_size - 1], fill=color)
+            draw.ellipse([0, 0, scale - 1, scale - 1], fill=color)
     else:
         # Default to circle if shape type not recognized or custom image fails
-        temp_draw.ellipse([0, 0, aa_size - 1, aa_size - 1], fill=color)
+        draw.ellipse([0, 0, scale - 1, scale - 1], fill=color)
     
     # Apply rotation if needed
     if rotation != 0:
-        temp_img = temp_img.rotate(rotation, resample=Image.BICUBIC, expand=False)
+        shape_img = shape_img.rotate(rotation, resample=Image.BICUBIC, expand=False)
     
-    # Resize with anti-aliasing back to original scale
-    temp_img = temp_img.resize((scale, scale), Image.LANCZOS)
-    
-    return temp_img
+    return shape_img
 
 if __name__ == "__main__":
     # Example usage:
