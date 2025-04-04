@@ -6,11 +6,119 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                             QLabel, QSpinBox, QComboBox, QPushButton, QFileDialog, 
                             QSlider, QLineEdit, QGroupBox, QGridLayout, QMessageBox,
                             QScrollArea, QColorDialog)
-from PyQt6.QtGui import QPixmap, QImage, QColor
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap, QImage, QColor, QMouseEvent, QWheelEvent, QKeyEvent, QPainter
+from PyQt6.QtCore import Qt, QPoint
 from PIL import Image, ImageQt
 import time
 from patternsy import create_pattern
+
+class ZoomablePreviewLabel(QLabel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setMinimumSize(400, 400)
+        self.setStyleSheet("background-color: lightgrey;")
+        
+        # Pan and zoom attributes
+        self.original_pixmap = None
+        self.zoom_factor = 1.0
+        self.pan_position = QPoint(0, 0)
+        self.last_mouse_position = QPoint(0, 0)
+        self.is_panning = False
+        
+        # Enable mouse tracking for panning
+        self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    
+    def set_pixmap(self, pixmap):
+        self.original_pixmap = pixmap
+        self.pan_position = QPoint(0, 0)  # Reset pan position when setting new image
+        self.zoom_factor = 1.0  # Reset zoom when setting new image
+        self.update_display()
+    
+    def update_display(self):
+        if self.original_pixmap is None:
+            return
+        
+        # We don't set the pixmap directly anymore - just trigger a repaint
+        self.update()
+    
+    def paintEvent(self, event):
+        if not self.original_pixmap:
+            return super().paintEvent(event)
+        
+        painter = QPainter(self)
+        
+        # Calculate the scaled size
+        scaled_width = int(self.original_pixmap.width() * self.zoom_factor)
+        scaled_height = int(self.original_pixmap.height() * self.zoom_factor)
+        
+        # Scale the pixmap
+        scaled_pixmap = self.original_pixmap.scaled(scaled_width, scaled_height, 
+                                                   Qt.AspectRatioMode.KeepAspectRatio)
+        
+        # Calculate center position
+        x_center = (self.width() - scaled_pixmap.width()) // 2
+        y_center = (self.height() - scaled_pixmap.height()) // 2
+        
+        # Apply panning offset
+        x_pos = x_center + self.pan_position.x()
+        y_pos = y_center + self.pan_position.y()
+        
+        # Draw the pixmap at the calculated position
+        painter.drawPixmap(x_pos, y_pos, scaled_pixmap)
+    
+    def wheelEvent(self, event: QWheelEvent):
+        delta = event.angleDelta().y()
+        zoom_change = 0.1 if delta > 0 else -0.1
+        
+        # Apply zoom change
+        old_zoom = self.zoom_factor
+        self.zoom_factor = max(0.1, self.zoom_factor + zoom_change)
+        
+        # Update display
+        self.update_display()
+        
+        # Prevent event propagation
+        event.accept()
+    
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.is_panning = True
+            self.last_mouse_position = event.position().toPoint()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+        super().mousePressEvent(event)
+    
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self.is_panning:
+            delta = event.position().toPoint() - self.last_mouse_position
+            self.pan_position += delta
+            self.last_mouse_position = event.position().toPoint()
+            self.update_display()
+        super().mouseMoveEvent(event)
+    
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton and self.is_panning:
+            self.is_panning = False
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+        super().mouseReleaseEvent(event)
+    
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.key() == Qt.Key.Key_Plus or event.key() == Qt.Key.Key_Equal:
+            # Zoom in
+            self.zoom_factor = min(5.0, self.zoom_factor + 0.1)
+            self.update_display()
+        elif event.key() == Qt.Key.Key_Minus:
+            # Zoom out
+            self.zoom_factor = max(0.1, self.zoom_factor - 0.1)
+            self.update_display()
+        elif event.key() == Qt.Key.Key_R:
+            # Reset zoom and pan
+            self.zoom_factor = 1.0
+            self.pan_position = QPoint(0, 0)
+            self.update_display()
+        else:
+            super().keyPressEvent(event)
 
 class PatternGeneratorApp(QMainWindow):
     def __init__(self):
@@ -188,10 +296,7 @@ class PatternGeneratorApp(QMainWindow):
         preview_group = QGroupBox("Preview")
         preview_layout = QVBoxLayout(preview_group)
         
-        self.preview_label = QLabel()
-        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_label.setMinimumSize(400, 400)
-        self.preview_label.setStyleSheet("background-color: lightgrey;")
+        self.preview_label = ZoomablePreviewLabel()
         preview_layout.addWidget(self.preview_label)
         
         # Add controls scroll and preview to main layout
@@ -297,8 +402,7 @@ class PatternGeneratorApp(QMainWindow):
             
             # Load the preview image
             img = QPixmap(temp_output)
-            self.preview_label.setPixmap(img)
-            self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.preview_label.set_pixmap(img)
             
             # Try to remove the temporary file
             try:
