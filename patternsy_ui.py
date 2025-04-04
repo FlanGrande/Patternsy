@@ -31,9 +31,15 @@ class ZoomablePreviewLabel(QLabel):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     
     def set_pixmap(self, pixmap):
+        # Only reset position and zoom if this is a new image with different dimensions
+        # or if there was no previous image
+        if (self.original_pixmap is None or 
+            self.original_pixmap.width() != pixmap.width() or 
+            self.original_pixmap.height() != pixmap.height()):
+            self.pan_position = QPoint(0, 0)
+            self.zoom_factor = 1.0
+            
         self.original_pixmap = pixmap
-        self.pan_position = QPoint(0, 0)  # Reset pan position when setting new image
-        self.zoom_factor = 1.0  # Reset zoom when setting new image
         self.update_display()
     
     def update_display(self):
