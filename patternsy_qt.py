@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                             QSlider, QLineEdit, QGroupBox, QGridLayout, QMessageBox,
                             QScrollArea)
 from PyQt6.QtGui import QPixmap, QImage, QColor
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt
 from PIL import Image, ImageQt
 import time
 from patternsy import create_pattern
@@ -41,9 +41,7 @@ class PatternGeneratorApp(QMainWindow):
         self.resize(1200, 800)
         
         self.init_ui()
-        
-        # Generate initial preview
-        QTimer.singleShot(500, self.update_preview)
+        self.update_preview()
         
     def init_ui(self):
         # Main widget
@@ -260,8 +258,7 @@ class PatternGeneratorApp(QMainWindow):
         self.spacing = self.spacing_spin.value()
         self.output_file = self.output_edit.text()
         
-        # Simple debounce using a timer
-        QTimer.singleShot(200, self.update_preview)
+        self.update_preview()
     
     def update_preview(self):
         try:
