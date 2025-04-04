@@ -54,7 +54,7 @@ class PatternGeneratorApp(QMainWindow):
         # === Left panel for controls ===
         controls_scroll = QScrollArea()
         controls_scroll.setWidgetResizable(True)
-        controls_scroll.setMinimumWidth(300)
+        controls_scroll.setMinimumWidth(450)
         controls_scroll.setMaximumWidth(400)
         
         controls_widget = QWidget()
@@ -242,7 +242,7 @@ class PatternGeneratorApp(QMainWindow):
             self,
             "Select Custom Image",
             "",
-            "Image files (*.png *.jpg *.jpeg *.gif *.bmp);;All files (*.*)"
+            "Image files (*.png *.jpg *.jpeg *.gif *.bmp, *.webp);;All files (*.*)"
         )
         
         if file_path:
