@@ -3,7 +3,7 @@
 import math
 import random
 import os
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageOps, ImageFilter
 
 def create_pattern(
         width=1200,
@@ -156,8 +156,19 @@ def create_shape(shape_type, scale, color, rotation, custom_image_path):
     draw = ImageDraw.Draw(shape_img)
     
     if shape_type == "circle":
-        # Draw a circle
-        draw.ellipse([0, 0, scale - 1, scale - 1], fill=color)
+        aa_scale = 8
+        large_size = scale * aa_scale
+        large_img = Image.new("RGBA", (large_size, large_size), (0, 0, 0, 0))
+        large_draw = ImageDraw.Draw(large_img)
+        
+        # Draw a circle on the larger image
+        large_draw.ellipse([0, 0, large_size - 1, large_size - 1], fill=color)
+        
+        # Apply a subtle blur for smoother edges
+        large_img = large_img.filter(ImageFilter.GaussianBlur(radius=0.5))
+        
+        # Resize down with antialiasing
+        shape_img = large_img.resize((scale, scale), Image.Resampling.LANCZOS)
         
     elif shape_type == "square":
         # Draw a square
