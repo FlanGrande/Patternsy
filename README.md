@@ -61,6 +61,49 @@ The repository includes some example patterns:
 - PIL (Python Imaging Library) / Pillow
 - Tkinter (for the GUI)
 
+## Creating Executables
+
+You can create standalone executables for Patternsy using PyInstaller. This allows you to run the application without requiring Python to be installed on the target system.
+
+### Prerequisites
+
+First, install PyInstaller:
+
+```bash
+pip install pyinstaller
+```
+
+### Creating the Executable
+
+To create an executable for the GUI version:
+
+```bash
+pyinstaller --onefile --windowed patternsy_ui.py
+```
+
+For the command-line version:
+
+```bash
+pyinstaller --onefile patternsy.py
+```
+
+### Command Options Explained
+
+- `--onefile`: Creates a single executable file instead of a directory with multiple files
+- `--windowed`: (GUI only) Prevents a console window from appearing when running the GUI application
+
+### Output Location
+
+The executable will be created in the `dist/` directory:
+- Linux/macOS: `dist/patternsy_ui` or `dist/patternsy`
+- Windows: `dist/patternsy_ui.exe` or `dist/patternsy.exe`
+
+### Cross-Platform Notes
+
+- Executables are platform-specific (Windows executables won't run on Linux/macOS and vice versa)
+- To create executables for different platforms, you need to run PyInstaller on each target platform
+- The executable includes all necessary dependencies, making it portable within the same platform
+
 ## License
 
 See the LICENSE file for details.
