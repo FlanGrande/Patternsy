@@ -63,46 +63,55 @@ The repository includes some example patterns:
 
 ## Creating Executables
 
-You can create standalone executables for Patternsy using PyInstaller. This allows you to run the application without requiring Python to be installed on the target system.
+You can create standalone executables for Patternsy using Docker and PyInstaller. This approach allows you to create Windows executables from any platform and ensures consistent builds.
 
 ### Prerequisites
 
-First, install PyInstaller:
+- Docker installed on your system
+- Basic familiarity with Docker commands
+
+### Creating Windows Executables
+
+To create a Windows executable from any platform (Linux, macOS, or Windows), use the provided Dockerfile:
 
 ```bash
-pip install pyinstaller
+# Build the Docker image
+docker build -f Dockerfile.windows -t patternsy-windows-builder .
+
+# Run the container to create the executable
+docker run --rm -v $(pwd)/dist:/app/dist patternsy-windows-builder
 ```
 
-### Creating the Executable
+### What the Docker Build Does
 
-To create an executable for the GUI version:
-
-```bash
-pyinstaller --onefile --windowed patternsy_ui.py
-```
-
-For the command-line version:
-
-```bash
-pyinstaller --onefile patternsy.py
-```
-
-### Command Options Explained
-
-- `--onefile`: Creates a single executable file instead of a directory with multiple files
-- `--windowed`: (GUI only) Prevents a console window from appearing when running the GUI application
+The `Dockerfile.windows` uses a Wine-based Python environment to:
+1. Install required Python packages (PyQt6, PyInstaller, Pillow)
+2. Copy your application files
+3. Use the PyInstaller spec file to build a Windows executable
+4. Output the executable to the `dist/` directory
 
 ### Output Location
 
-The executable will be created in the `dist/` directory:
-- Linux/macOS: `dist/patternsy_ui` or `dist/patternsy`
-- Windows: `dist/patternsy_ui.exe` or `dist/patternsy.exe`
+After running the Docker command, you'll find the Windows executable in:
+- `dist/patternsy_ui.exe` - The GUI application executable
+
+### Alternative: Native PyInstaller
+
+If you're already on the target platform, you can use PyInstaller directly:
+
+```bash
+# Install PyInstaller
+pip install pyinstaller
+
+# Create executable
+pyinstaller --onefile --windowed patternsy_ui.py
+```
 
 ### Cross-Platform Notes
 
-- Executables are platform-specific (Windows executables won't run on Linux/macOS and vice versa)
-- To create executables for different platforms, you need to run PyInstaller on each target platform
-- The executable includes all necessary dependencies, making it portable within the same platform
+- The Docker approach is recommended for creating Windows executables from non-Windows systems
+- Docker ensures consistent builds regardless of your host operating system
+- The resulting executable includes all necessary dependencies and can run on Windows without Python installed
 
 ## License
 
