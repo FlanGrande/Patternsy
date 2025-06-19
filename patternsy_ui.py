@@ -133,8 +133,10 @@ class PatternGeneratorApp(QMainWindow):
         # Default values
         self.width = 1024  # Changed from 800 to 1024
         self.height = 1024  # Changed from 800 to 1024
-        self.base_scale = 32
-        self.spacing = 128
+        self.shape_width = 32
+        self.shape_height = 32
+        self.rows = 8
+        self.columns = 8
         self.pattern_type = "offset_grid"
         self.shape_type = "circle"
         self.custom_image_path = ""
@@ -206,23 +208,37 @@ class PatternGeneratorApp(QMainWindow):
         self.shape_combo.currentTextChanged.connect(self.on_shape_changed)
         shape_layout.addWidget(self.shape_combo, 0, 1)
         
-        shape_layout.addWidget(QLabel("Base Scale:"), 1, 0)
-        self.scale_spin = QSpinBox()
-        self.scale_spin.setRange(4, 1000)
-        self.scale_spin.setValue(self.base_scale)
-        self.scale_spin.valueChanged.connect(self.schedule_preview_update)
-        shape_layout.addWidget(self.scale_spin, 1, 1)
+        shape_layout.addWidget(QLabel("Shape Width:"), 1, 0)
+        self.shape_width_spin = QSpinBox()
+        self.shape_width_spin.setRange(1, 500)
+        self.shape_width_spin.setValue(self.shape_width)
+        self.shape_width_spin.valueChanged.connect(self.schedule_preview_update)
+        shape_layout.addWidget(self.shape_width_spin, 1, 1)
         
-        shape_layout.addWidget(QLabel("Spacing:"), 2, 0)
-        self.spacing_spin = QSpinBox()
-        self.spacing_spin.setRange(10, 1000)
-        self.spacing_spin.setValue(self.spacing)
-        self.spacing_spin.valueChanged.connect(self.schedule_preview_update)
-        shape_layout.addWidget(self.spacing_spin, 2, 1)
+        shape_layout.addWidget(QLabel("Shape Height:"), 2, 0)
+        self.shape_height_spin = QSpinBox()
+        self.shape_height_spin.setRange(1, 500)
+        self.shape_height_spin.setValue(self.shape_height)
+        self.shape_height_spin.valueChanged.connect(self.schedule_preview_update)
+        shape_layout.addWidget(self.shape_height_spin, 2, 1)
+        
+        shape_layout.addWidget(QLabel("Columns:"), 3, 0)
+        self.columns_spin = QSpinBox()
+        self.columns_spin.setRange(1, 500)
+        self.columns_spin.setValue(self.columns)
+        self.columns_spin.valueChanged.connect(self.schedule_preview_update)
+        shape_layout.addWidget(self.columns_spin, 3, 1)
+        
+        shape_layout.addWidget(QLabel("Rows:"), 4, 0)
+        self.rows_spin = QSpinBox()
+        self.rows_spin.setRange(1, 500)
+        self.rows_spin.setValue(self.rows)
+        self.rows_spin.valueChanged.connect(self.schedule_preview_update)
+        shape_layout.addWidget(self.rows_spin, 4, 1)
         
         self.custom_img_btn = QPushButton("Custom Image...")
         self.custom_img_btn.clicked.connect(self.select_custom_image)
-        shape_layout.addWidget(self.custom_img_btn, 3, 0, 1, 2)
+        shape_layout.addWidget(self.custom_img_btn, 5, 0, 1, 2)
         
         controls_layout.addWidget(shape_group)
         
@@ -400,8 +416,10 @@ class PatternGeneratorApp(QMainWindow):
         # Get current values from UI
         self.width = self.width_spin.value()
         self.height = self.height_spin.value()
-        self.base_scale = self.scale_spin.value()
-        self.spacing = self.spacing_spin.value()
+        self.shape_width = self.shape_width_spin.value()
+        self.shape_height = self.shape_height_spin.value()
+        self.rows = self.rows_spin.value()
+        self.columns = self.columns_spin.value()
         self.output_file = self.output_edit.text()
         
         self.update_preview()
@@ -416,15 +434,21 @@ class PatternGeneratorApp(QMainWindow):
             preview_height = max(200, int(self.height * self.preview_scale))
             
             # Scale down other parameters proportionally for faster preview
-            preview_base_scale = max(4, int(self.base_scale * self.preview_scale))
-            preview_spacing = max(10, int(self.spacing * self.preview_scale))
+            preview_shape_width = max(1, int(self.shape_width * self.preview_scale))
+            preview_shape_height = max(1, int(self.shape_height * self.preview_scale))
+            
+            # Calculate spacing based on grid dimensions
+            preview_spacing_x = preview_width // max(1, self.columns)
+            preview_spacing_y = preview_height // max(1, self.rows)
             
             # Generate the preview pattern
             create_pattern(
                 width=preview_width,
                 height=preview_height,
-                base_scale=preview_base_scale,
-                spacing=preview_spacing,
+                shape_width=preview_shape_width,
+                shape_height=preview_shape_height,
+                spacing_x=preview_spacing_x,
+                spacing_y=preview_spacing_y,
                 pattern_type=self.pattern_type,
                 shape_type=self.shape_type,
                 custom_image_path=self.custom_image_path if self.shape_type == "custom" else None,
@@ -461,6 +485,10 @@ class PatternGeneratorApp(QMainWindow):
             if not output_file.lower().endswith('.png'):
                 output_file += '.png'
             
+            # Calculate spacing based on grid dimensions
+            spacing_x = self.width // max(1, self.columns)
+            spacing_y = self.height // max(1, self.rows)
+            
             # Show a progress message
             QMessageBox.information(self, "Generating", "Generating pattern. This might take a moment...")
             
@@ -468,8 +496,10 @@ class PatternGeneratorApp(QMainWindow):
             create_pattern(
                 width=self.width,
                 height=self.height,
-                base_scale=self.base_scale,
-                spacing=self.spacing,
+                shape_width=self.shape_width,
+                shape_height=self.shape_height,
+                spacing_x=spacing_x,
+                spacing_y=spacing_y,
                 pattern_type=self.pattern_type,
                 shape_type=self.shape_type,
                 custom_image_path=self.custom_image_path if self.shape_type == "custom" else None,
