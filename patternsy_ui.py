@@ -10,6 +10,7 @@ from PyQt6.QtGui import QPixmap, QImage, QColor, QMouseEvent, QWheelEvent, QKeyE
 from PyQt6.QtCore import Qt, QPoint, QSize
 from PIL import Image, ImageQt
 import time
+import re
 from patternsy import create_pattern
 
 class ZoomablePreviewLabel(QLabel):
@@ -158,7 +159,112 @@ class PatternGeneratorApp(QMainWindow):
         
         self.init_ui()
         self.update_preview()
+
+    def evaluate_expression(self, expression):
+        """Safely evaluate a mathematical expression and return the result as an integer."""
+        try:
+            # Remove whitespace and convert to string
+            expr = str(expression).strip()
+            
+            # If empty, return None
+            if not expr:
+                return None
+            
+            # If it's already a number, return it
+            if expr.isdigit():
+                return int(expr)
+            
+            # Handle negative numbers - but don't allow them since dimensions must be positive
+            if expr.startswith('-'):
+                return None
+            
+            # Allow only safe mathematical operations
+            # Remove any characters that aren't digits, operators, parentheses, or decimal points
+            if not re.match(r'^[0-9+\-*/().\s]+$', expr):
+                return None
+            
+            # Check for division by zero patterns
+            if '/0' in expr.replace(' ', ''):
+                return None
+            
+            # Evaluate the expression safely
+            result = eval(expr, {"__builtins__": {}}, {})
+            
+            # Handle float results
+            if isinstance(result, float):
+                if not (result.is_finite() and not result.is_nan()):
+                    return None
+                result = int(round(result))
+            else:
+                result = int(result)
+            
+            # Ensure it's within reasonable bounds
+            if result > 16384:
+                result = 16384
+                
+            return result
+        except Exception as e:
+            # If evaluation fails, return None to indicate error
+            return None
+
+    def on_width_changed(self):
+        """Handle width input field changes."""
+        text = self.width_edit.text()
+        print(f"Width changed: '{text}'")  # Debug print
+        result = self.evaluate_expression(text)
+        print(f"Width evaluation result: {result}")  # Debug print
         
+        if result is not None:
+            self.width = result
+            self.width_edit.setText(str(result))
+            self.width_edit.setStyleSheet("")  # Reset to normal style
+            print(f"Calling schedule_preview_update with width={self.width}")  # Debug print
+            self.schedule_preview_update()
+        else:
+            # Invalid expression - highlight in red
+            self.width_edit.setStyleSheet("background-color: #ffcccc;")
+            print("Width expression invalid")  # Debug print
+
+    def on_height_changed(self):
+        """Handle height input field changes."""
+        text = self.height_edit.text()
+        print(f"Height changed: '{text}'")  # Debug print
+        result = self.evaluate_expression(text)
+        print(f"Height evaluation result: {result}")  # Debug print
+        
+        if result is not None:
+            self.height = result
+            self.height_edit.setText(str(result))
+            self.height_edit.setStyleSheet("")  # Reset to normal style
+            print(f"Calling schedule_preview_update with height={self.height}")  # Debug print
+            self.schedule_preview_update()
+        else:
+            # Invalid expression - highlight in red
+            self.height_edit.setStyleSheet("background-color: #ffcccc;")
+            print("Height expression invalid")  # Debug print
+
+    def on_width_text_changed(self):
+        """Handle width text changes for real-time validation."""
+        text = self.width_edit.text()
+        result = self.evaluate_expression(text)
+        
+        if result is not None:
+            self.width_edit.setStyleSheet("")  # Reset to normal style
+        else:
+            # Invalid expression - highlight in red
+            self.width_edit.setStyleSheet("background-color: #ffcccc;")
+
+    def on_height_text_changed(self):
+        """Handle height text changes for real-time validation."""
+        text = self.height_edit.text()
+        result = self.evaluate_expression(text)
+        
+        if result is not None:
+            self.height_edit.setStyleSheet("")  # Reset to normal style
+        else:
+            # Invalid expression - highlight in red
+            self.height_edit.setStyleSheet("background-color: #ffcccc;")
+
     def init_ui(self):
         # Main widget
         main_widget = QWidget()
@@ -182,18 +288,20 @@ class PatternGeneratorApp(QMainWindow):
         size_layout = QGridLayout(size_group)
         
         size_layout.addWidget(QLabel("Width:"), 0, 0)
-        self.width_spin = QSpinBox()
-        self.width_spin.setRange(100, 8192)
-        self.width_spin.setValue(self.width)
-        self.width_spin.valueChanged.connect(self.schedule_preview_update)
-        size_layout.addWidget(self.width_spin, 0, 1)
+        self.width_edit = QLineEdit(str(self.width))
+        self.width_edit.setToolTip("Enter width in pixels or mathematical expression (e.g., 6*128)")
+        self.width_edit.editingFinished.connect(self.on_width_changed)
+        self.width_edit.textChanged.connect(self.on_width_text_changed)
+        self.width_edit.returnPressed.connect(self.on_width_changed)
+        size_layout.addWidget(self.width_edit, 0, 1)
         
         size_layout.addWidget(QLabel("Height:"), 1, 0)
-        self.height_spin = QSpinBox()
-        self.height_spin.setRange(100, 8192)
-        self.height_spin.setValue(self.height)
-        self.height_spin.valueChanged.connect(self.schedule_preview_update)
-        size_layout.addWidget(self.height_spin, 1, 1)
+        self.height_edit = QLineEdit(str(self.height))
+        self.height_edit.setToolTip("Enter height in pixels or mathematical expression (e.g., 4*256)")
+        self.height_edit.editingFinished.connect(self.on_height_changed)
+        self.height_edit.textChanged.connect(self.on_height_text_changed)
+        self.height_edit.returnPressed.connect(self.on_height_changed)
+        size_layout.addWidget(self.height_edit, 1, 1)
         
         controls_layout.addWidget(size_group)
         
@@ -413,25 +521,24 @@ class PatternGeneratorApp(QMainWindow):
             self.schedule_preview_update()
     
     def schedule_preview_update(self):
-        # Get current values from UI
-        self.width = self.width_spin.value()
-        self.height = self.height_spin.value()
+        # Get current values from UI (width and height are now handled by their respective change handlers)
         self.shape_width = self.shape_width_spin.value()
         self.shape_height = self.shape_height_spin.value()
         self.rows = self.rows_spin.value()
         self.columns = self.columns_spin.value()
         self.output_file = self.output_edit.text()
         
+        print(f"schedule_preview_update called: width={self.width}, height={self.height}")  # Debug print
         self.update_preview()
-    
+
     def update_preview(self):
         try:
             # Create a temporary file for the preview
             temp_output = "preview_temp.png"
             
             # Calculate preview dimensions
-            preview_width = max(200, int(self.width * self.preview_scale))
-            preview_height = max(200, int(self.height * self.preview_scale))
+            preview_width = max(50, int(self.width * self.preview_scale))
+            preview_height = max(50, int(self.height * self.preview_scale))
             
             # Scale down other parameters proportionally for faster preview
             preview_shape_width = max(1, int(self.shape_width * self.preview_scale))
