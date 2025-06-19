@@ -25,7 +25,7 @@ def create_pattern(
         output_file="pattern.png"
 ):
     """
-    Create a pattern with various shapes and arrangements.
+    Create a seamlessly tiling pattern with various shapes and arrangements.
     
     Parameters:
     - width, height: dimensions of the output image
@@ -64,7 +64,9 @@ def create_pattern(
         width, height, spacing_x, spacing_y, pattern_type
     )
     
-    # Draw shapes at each coordinate
+    # Draw shapes at each coordinate with tiling support
+    max_shape_size = max(shape_width, shape_height)
+    
     for x, y in coordinates:
         # Apply scale randomization if specified
         if scale_randomization > 0:
@@ -95,88 +97,93 @@ def create_pattern(
         paste_x = int(x - shape_img.width / 2)
         paste_y = int(y - shape_img.height / 2)
         
-        # Paste the shape onto the main image
-        img.paste(shape_img, (paste_x, paste_y), shape_img)
+        # Draw the shape with tiling - handle wrapping for seamless tiling
+        draw_shape_with_tiling(img, shape_img, paste_x, paste_y, width, height)
     
     # Convert to RGB and save the resulting image
     img = img.convert("RGB")
     img.save(output_file)
+    print(f"Pattern saved as {output_file}")
+    return img
 
 def generate_pattern_coordinates(width, height, spacing_x, spacing_y, pattern_type):
-    """Generate coordinates for shapes based on the specified pattern type."""
+    """Generate coordinates for shapes based on the specified pattern type with seamless tiling support."""
     coordinates = []
     
     if pattern_type == "grid":
-        # Simple grid pattern
-        for y in range(spacing_y // 2, height, spacing_y):
-            for x in range(spacing_x // 2, width, spacing_x):
+        # Simple grid pattern with seamless tiling
+        for y in range(0, height + spacing_y, spacing_y):
+            for x in range(0, width + spacing_x, spacing_x):
                 coordinates.append((x, y))
                 
     elif pattern_type == "offset_grid":
-        # Grid pattern with every other row offset (original polka dot pattern)
-        for row_index, y in enumerate(range(spacing_y // 2, height, spacing_y)):
+        # Grid pattern with every other row offset for seamless tiling
+        for row_index, y in enumerate(range(0, height + spacing_y, spacing_y)):
             if row_index % 2 == 1:
-                # Offset row - include edge shapes for proper tiling
+                # Offset row
                 row_offset = spacing_x // 2
-                # Start from negative position to include left edge shape
-                start_x = spacing_x // 2 + row_offset - spacing_x
-                # Extend beyond width to include right edge shape
-                end_x = width + spacing_x
-                for x in range(start_x, end_x, spacing_x):
+                for x in range(row_offset, width + spacing_x + row_offset, spacing_x):
                     coordinates.append((x, y))
             else:
                 # Regular row
-                for x in range(spacing_x // 2, width, spacing_x):
+                for x in range(0, width + spacing_x, spacing_x):
                     coordinates.append((x, y))
                 
     elif pattern_type == "random":
-        # Random distribution
+        # Random distribution with tiling considerations
+        # Use fixed seed based on canvas dimensions for consistent tiling
+        random.seed(hash((width, height, spacing_x, spacing_y)))
+        
         num_shapes = (width // spacing_x) * (height // spacing_y)
-        # Add 20% more for better coverage
         num_shapes = int(num_shapes * 1.2)
         
-        # Ensure minimum spacing between shapes
-        min_spacing_x = spacing_x // 2
-        min_spacing_y = spacing_y // 2
+        min_spacing_x = spacing_x // 3
+        min_spacing_y = spacing_y // 3
         
         for _ in range(num_shapes):
-            # Try up to 10 times to find a non-overlapping position
-            for attempt in range(10):
-                x = random.randint(min_spacing_x, width - min_spacing_x)
-                y = random.randint(min_spacing_y, height - min_spacing_y)
+            for attempt in range(20):
+                x = random.randint(0, width)
+                y = random.randint(0, height)
                 
                 # Check if this point is far enough from all existing points
+                # considering tiling wraparound
                 too_close = False
                 for ex, ey in coordinates:
-                    distance_x = abs(ex - x)
-                    distance_y = abs(ey - y)
-                    if distance_x < min_spacing_x and distance_y < min_spacing_y:
+                    # Calculate distance considering tiling
+                    dx = min(abs(ex - x), width - abs(ex - x))
+                    dy = min(abs(ey - y), height - abs(ey - y))
+                    
+                    if dx < min_spacing_x and dy < min_spacing_y:
                         too_close = True
                         break
                         
                 if not too_close:
                     coordinates.append((x, y))
                     break
+        
+        # Reset random seed
+        random.seed()
                     
     elif pattern_type == "spiral":
-        # Spiral pattern
+        # Spiral pattern with tiling considerations
         center_x, center_y = width // 2, height // 2
         max_radius = min(width, height) // 2
         
-        a = spacing_x / (2 * math.pi)  # Controls spacing between spiral arms
-        b = spacing_y / 10  # Controls how quickly spiral expands
+        a = spacing_x / (2 * math.pi)
+        b = spacing_y / 20
         
         t = 0
         while True:
             r = a * t
-            if r > max_radius:
+            if r > max_radius * 1.5:  # Extend beyond center for better tiling
                 break
                 
             x = center_x + r * math.cos(t)
             y = center_y + r * math.sin(t)
             
-            if 0 <= x < width and 0 <= y < height:
-                coordinates.append((int(x), int(y)))
+            # Add coordinates even if they're outside the immediate canvas
+            # The tiling function will handle wrapping
+            coordinates.append((int(x), int(y)))
                 
             t += b / r if r > 0 else b
     
@@ -256,6 +263,64 @@ def create_shape(shape_type, shape_width, shape_height, color, rotation, custom_
         shape_img = shape_img.rotate(rotation, resample=Image.BICUBIC, expand=False)
     
     return shape_img
+
+def draw_shape_with_tiling(img, shape_img, paste_x, paste_y, width, height):
+    """Draw a shape with seamless tiling support - handles wrapping at canvas edges."""
+    shape_width = shape_img.width
+    shape_height = shape_img.height
+    
+    # Calculate all positions where this shape needs to be drawn to ensure seamless tiling
+    positions = []
+    
+    # Original position
+    positions.append((paste_x, paste_y))
+    
+    # Handle horizontal wrapping
+    if paste_x < 0:
+        positions.append((paste_x + width, paste_y))
+    elif paste_x + shape_width > width:
+        positions.append((paste_x - width, paste_y))
+    
+    # Handle vertical wrapping
+    if paste_y < 0:
+        positions.append((paste_x, paste_y + height))
+    elif paste_y + shape_height > height:
+        positions.append((paste_x, paste_y - height))
+    
+    # Handle corner wrapping (both horizontal and vertical)
+    if paste_x < 0 and paste_y < 0:
+        positions.append((paste_x + width, paste_y + height))
+    elif paste_x < 0 and paste_y + shape_height > height:
+        positions.append((paste_x + width, paste_y - height))
+    elif paste_x + shape_width > width and paste_y < 0:
+        positions.append((paste_x - width, paste_y + height))
+    elif paste_x + shape_width > width and paste_y + shape_height > height:
+        positions.append((paste_x - width, paste_y - height))
+    
+    # Draw the shape at all calculated positions
+    for pos_x, pos_y in positions:
+        # Only draw if the shape would be visible within the canvas
+        if (pos_x + shape_width > 0 and pos_x < width and 
+            pos_y + shape_height > 0 and pos_y < height):
+            
+            # Create a cropped version of the shape if it extends beyond canvas
+            if (pos_x < 0 or pos_y < 0 or 
+                pos_x + shape_width > width or pos_y + shape_height > height):
+                
+                # Calculate crop boundaries
+                crop_left = max(0, -pos_x)
+                crop_top = max(0, -pos_y)
+                crop_right = min(shape_width, width - pos_x)
+                crop_bottom = min(shape_height, height - pos_y)
+                
+                if crop_right > crop_left and crop_bottom > crop_top:
+                    cropped_shape = shape_img.crop((crop_left, crop_top, crop_right, crop_bottom))
+                    final_x = max(0, pos_x)
+                    final_y = max(0, pos_y)
+                    img.paste(cropped_shape, (final_x, final_y), cropped_shape)
+            else:
+                # Shape fits entirely within canvas
+                img.paste(shape_img, (pos_x, pos_y), shape_img)
 
 if __name__ == "__main__":
     # Example usage:
