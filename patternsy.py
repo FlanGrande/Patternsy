@@ -5,6 +5,34 @@ import random
 import os
 from PIL import Image, ImageDraw, ImageOps, ImageFilter
 
+# Global cache for custom images
+_custom_image_cache = {}
+
+def get_cached_custom_image(custom_image_path, shape_width, shape_height):
+    """Get a cached custom image or load and cache it if not present."""
+    if not custom_image_path or not os.path.exists(custom_image_path):
+        return None
+    
+    # Create cache key based on path and dimensions
+    cache_key = (custom_image_path, shape_width, shape_height)
+    
+    # Check if we already have this image cached
+    if cache_key in _custom_image_cache:
+        return _custom_image_cache[cache_key].copy()
+    
+    try:
+        # Load and resize the custom image
+        custom_img = Image.open(custom_image_path).convert("RGBA")
+        custom_img = custom_img.resize((shape_width, shape_height), Image.LANCZOS)
+        
+        # Cache the resized image
+        _custom_image_cache[cache_key] = custom_img.copy()
+        
+        return custom_img
+    except Exception as e:
+        print(f"Error loading custom image: {e}")
+        return None
+
 def create_pattern(
         width=1200,
         height=1200,
@@ -22,7 +50,9 @@ def create_pattern(
         scale_randomization=0.0,
         base_rotation=0.0,
         rotation_randomization=0.0,
-        output_file="pattern.png"
+        output_file="pattern.png",
+        antialiasing=True,
+        aa_scale=4
 ):
     """
     Create a seamlessly tiling pattern with various shapes and arrangements.
@@ -42,65 +72,76 @@ def create_pattern(
     - base_rotation: base rotation for all shapes in degrees
     - rotation_randomization: random variation in rotation (0.0-1.0)
     - output_file: filename for the output image
+    - antialiasing: whether to apply antialiasing to the whole image
+    - aa_scale: antialiasing scale factor (higher = better quality, slower)
     """
     
-    # Use shape_width and shape_height if provided, otherwise fall back to base_scale
     if shape_width is None:
         shape_width = base_scale
     if shape_height is None:
         shape_height = base_scale
     
-    # Use spacing_x and spacing_y if provided, otherwise fall back to spacing
     if spacing_x is None:
         spacing_x = spacing
     if spacing_y is None:
         spacing_y = spacing
     
-    # Create a new image with the specified background color
-    img = Image.new("RGBA", (width, height), bg_color)
+    # Scale up dimensions for antialiasing
+    if antialiasing:
+        aa_width = width * aa_scale
+        aa_height = height * aa_scale
+        aa_shape_width = shape_width * aa_scale
+        aa_shape_height = shape_height * aa_scale
+        aa_spacing_x = spacing_x * aa_scale
+        aa_spacing_y = spacing_y * aa_scale
+    else:
+        aa_width = width
+        aa_height = height
+        aa_shape_width = shape_width
+        aa_shape_height = shape_height
+        aa_spacing_x = spacing_x
+        aa_spacing_y = spacing_y
     
-    # Generate pattern coordinates based on selected pattern type
+    img = Image.new("RGBA", (aa_width, aa_height), bg_color)
+    
     coordinates = generate_pattern_coordinates(
-        width, height, spacing_x, spacing_y, pattern_type
+        aa_width, aa_height, aa_spacing_x, aa_spacing_y, pattern_type
     )
     
-    # Draw shapes at each coordinate with tiling support
-    max_shape_size = max(shape_width, shape_height)
+    max_shape_size = max(aa_shape_width, aa_shape_height)
     
     for x, y in coordinates:
-        # Apply scale randomization if specified
         if scale_randomization > 0:
             scale_factor = 1.0 - (scale_randomization * random.uniform(-1, 1))
-            current_shape_width = int(shape_width * scale_factor)
-            current_shape_height = int(shape_height * scale_factor)
-            # Ensure minimum size
+            current_shape_width = int(aa_shape_width * scale_factor)
+            current_shape_height = int(aa_shape_height * scale_factor)
             current_shape_width = max(current_shape_width, 1)
             current_shape_height = max(current_shape_height, 1)
         else:
-            current_shape_width = shape_width
-            current_shape_height = shape_height
+            current_shape_width = aa_shape_width
+            current_shape_height = aa_shape_height
             
-        # Apply rotation randomization if specified
         if rotation_randomization > 0:
             rotation_range = 360 * rotation_randomization
             current_rotation = base_rotation + random.uniform(-rotation_range/2, rotation_range/2)
         else:
             current_rotation = base_rotation
         
-        # Draw the shape
         shape_img = create_shape(
             shape_type, current_shape_width, current_shape_height, fg_color, current_rotation, 
             custom_image_path
         )
         
-        # Calculate paste position (centered on the coordinate)
         paste_x = int(x - shape_img.width / 2)
         paste_y = int(y - shape_img.height / 2)
         
-        # Draw the shape with tiling - handle wrapping for seamless tiling
-        draw_shape_with_tiling(img, shape_img, paste_x, paste_y, width, height)
+        draw_shape_with_tiling(img, shape_img, paste_x, paste_y, aa_width, aa_height)
     
-    # Convert to RGB and save the resulting image
+    # Apply antialiasing by resizing down
+    if antialiasing:
+        img = img.resize((width, height), Image.Resampling.LANCZOS)
+        img = img.filter(ImageFilter.GaussianBlur(radius=0.3))
+    
     img = img.convert("RGB")
     img.save(output_file)
     print(f"Pattern saved as {output_file}")
@@ -191,40 +232,24 @@ def generate_pattern_coordinates(width, height, spacing_x, spacing_y, pattern_ty
 
 def create_shape(shape_type, shape_width, shape_height, color, rotation, custom_image_path):
     """Create a shape image based on the specified shape type."""
-    # Create a transparent image for the shape
     shape_img = Image.new("RGBA", (shape_width, shape_height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(shape_img)
     
     if shape_type == "circle":
-        aa_scale = 8
-        large_size = max(shape_width, shape_height) * aa_scale
-        large_img = Image.new("RGBA", (large_size, large_size), (0, 0, 0, 0))
-        large_draw = ImageDraw.Draw(large_img)
-        
-        # Draw a circle on the larger image
-        large_draw.ellipse([0, 0, large_size - 1, large_size - 1], fill=color)
-        
-        # Apply a subtle blur for smoother edges
-        large_img = large_img.filter(ImageFilter.GaussianBlur(radius=0.5))
-        
-        # Resize down with antialiasing
-        shape_img = large_img.resize((shape_width, shape_height), Image.Resampling.LANCZOS)
+        draw.ellipse([0, 0, shape_width - 1, shape_height - 1], fill=color)
         
     elif shape_type == "square":
-        # Draw a square
         draw.rectangle([0, 0, shape_width - 1, shape_height - 1], fill=color)
         
     elif shape_type == "triangle":
-        # Draw a triangle (pointing up)
         points = [
-            (shape_width // 2, 0),       # Top
-            (0, shape_height - 1),        # Bottom left
-            (shape_width - 1, shape_height - 1)  # Bottom right
+            (shape_width // 2, 0),       
+            (0, shape_height - 1),        
+            (shape_width - 1, shape_height - 1)  
         ]
         draw.polygon(points, fill=color)
         
     elif shape_type == "star":
-        # Draw a five-pointed star
         points = []
         center_x = shape_width // 2
         center_y = shape_height // 2
@@ -232,7 +257,6 @@ def create_shape(shape_type, shape_width, shape_height, color, rotation, custom_
         inner_radius = outer_radius // 2
         
         for i in range(10):
-            # Alternate between outer and inner radius
             radius = outer_radius if i % 2 == 0 else inner_radius
             angle = math.pi / 5 * i - math.pi / 2
             x = center_x + radius * math.cos(angle)
@@ -242,25 +266,16 @@ def create_shape(shape_type, shape_width, shape_height, color, rotation, custom_
         draw.polygon(points, fill=color)
         
     elif shape_type == "custom" and custom_image_path and os.path.exists(custom_image_path):
-        # Use a custom image
-        try:
-            # Load the custom image
-            custom_img = Image.open(custom_image_path).convert("RGBA")
-            # Resize to match our size
-            custom_img = custom_img.resize((shape_width, shape_height), Image.LANCZOS)
-            # Replace shape_img with the custom image
+        custom_img = get_cached_custom_image(custom_image_path, shape_width, shape_height)
+        if custom_img:
             shape_img = custom_img
-        except Exception as e:
-            print(f"Error loading custom image: {e}")
-            # Fallback to a circle if the custom image fails
+        else:
             draw.ellipse([0, 0, shape_width - 1, shape_height - 1], fill=color)
     else:
-        # Default to circle if shape type not recognized or custom image fails
         draw.ellipse([0, 0, shape_width - 1, shape_height - 1], fill=color)
     
-    # Apply rotation if needed
     if rotation != 0:
-        shape_img = shape_img.rotate(rotation, resample=Image.BICUBIC, expand=False)
+        shape_img = shape_img.rotate(rotation, resample=Image.NEAREST, expand=False)
     
     return shape_img
 
@@ -341,6 +356,8 @@ if __name__ == "__main__":
         scale_randomization=0.0,     # No scale randomization
         base_rotation=0.0,           # No base rotation
         rotation_randomization=0.0,  # No rotation randomization
-        output_file="my_polka_pattern.png"
+        output_file="my_polka_pattern.png",
+        antialiasing=True,
+        aa_scale=4
     )
     print("Pattern created and saved as 'my_polka_pattern.png'.")
