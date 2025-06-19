@@ -152,27 +152,26 @@ def generate_pattern_coordinates(width, height, spacing_x, spacing_y, pattern_ty
     coordinates = []
     
     if pattern_type == "grid":
-        # Simple grid pattern with seamless tiling
-        for y in range(0, height + spacing_y, spacing_y):
-            for x in range(0, width + spacing_x, spacing_x):
+        # Simple grid pattern - start from half spacing to center shapes in grid cells
+        for y in range(spacing_y // 2, height, spacing_y):
+            for x in range(spacing_x // 2, width, spacing_x):
                 coordinates.append((x, y))
                 
     elif pattern_type == "offset_grid":
         # Grid pattern with every other row offset for seamless tiling
-        for row_index, y in enumerate(range(0, height + spacing_y, spacing_y)):
+        for row_index, y in enumerate(range(spacing_y // 2, height, spacing_y)):
             if row_index % 2 == 1:
-                # Offset row
+                # Offset row - shift by half spacing
                 row_offset = spacing_x // 2
-                for x in range(row_offset, width + spacing_x + row_offset, spacing_x):
+                for x in range(spacing_x // 2 + row_offset, width + spacing_x, spacing_x):
                     coordinates.append((x, y))
             else:
                 # Regular row
-                for x in range(0, width + spacing_x, spacing_x):
+                for x in range(spacing_x // 2, width, spacing_x):
                     coordinates.append((x, y))
                 
     elif pattern_type == "random":
         # Random distribution with tiling considerations
-        # Use fixed seed based on canvas dimensions for consistent tiling
         random.seed(hash((width, height, spacing_x, spacing_y)))
         
         num_shapes = (width // spacing_x) * (height // spacing_y)
@@ -183,16 +182,14 @@ def generate_pattern_coordinates(width, height, spacing_x, spacing_y, pattern_ty
         
         for _ in range(num_shapes):
             for attempt in range(20):
-                x = random.randint(0, width)
-                y = random.randint(0, height)
+                x = random.randint(0, width - 1)
+                y = random.randint(0, height - 1)
                 
                 # Check if this point is far enough from all existing points
-                # considering tiling wraparound
                 too_close = False
                 for ex, ey in coordinates:
-                    # Calculate distance considering tiling
-                    dx = min(abs(ex - x), width - abs(ex - x))
-                    dy = min(abs(ey - y), height - abs(ey - y))
+                    dx = abs(ex - x)
+                    dy = abs(ey - y)
                     
                     if dx < min_spacing_x and dy < min_spacing_y:
                         too_close = True
@@ -202,11 +199,10 @@ def generate_pattern_coordinates(width, height, spacing_x, spacing_y, pattern_ty
                     coordinates.append((x, y))
                     break
         
-        # Reset random seed
         random.seed()
                     
     elif pattern_type == "spiral":
-        # Spiral pattern with tiling considerations
+        # Spiral pattern
         center_x, center_y = width // 2, height // 2
         max_radius = min(width, height) // 2
         
@@ -216,15 +212,14 @@ def generate_pattern_coordinates(width, height, spacing_x, spacing_y, pattern_ty
         t = 0
         while True:
             r = a * t
-            if r > max_radius * 1.5:  # Extend beyond center for better tiling
+            if r > max_radius:
                 break
                 
             x = center_x + r * math.cos(t)
             y = center_y + r * math.sin(t)
             
-            # Add coordinates even if they're outside the immediate canvas
-            # The tiling function will handle wrapping
-            coordinates.append((int(x), int(y)))
+            if 0 <= x < width and 0 <= y < height:
+                coordinates.append((int(x), int(y)))
                 
             t += b / r if r > 0 else b
     
@@ -284,58 +279,62 @@ def draw_shape_with_tiling(img, shape_img, paste_x, paste_y, width, height):
     shape_width = shape_img.width
     shape_height = shape_img.height
     
-    # Calculate all positions where this shape needs to be drawn to ensure seamless tiling
-    positions = []
+    # Draw the shape at the original position and handle tiling by drawing
+    # wrapped versions only where the original shape extends beyond boundaries
     
-    # Original position
-    positions.append((paste_x, paste_y))
+    # Always draw the main shape (cropped if necessary)
+    draw_cropped_shape(img, shape_img, paste_x, paste_y, width, height)
     
-    # Handle horizontal wrapping
+    # Handle horizontal tiling
     if paste_x < 0:
-        positions.append((paste_x + width, paste_y))
+        # Shape extends beyond left edge, draw wrapped version on right
+        draw_cropped_shape(img, shape_img, paste_x + width, paste_y, width, height)
     elif paste_x + shape_width > width:
-        positions.append((paste_x - width, paste_y))
+        # Shape extends beyond right edge, draw wrapped version on left
+        draw_cropped_shape(img, shape_img, paste_x - width, paste_y, width, height)
     
-    # Handle vertical wrapping
+    # Handle vertical tiling
     if paste_y < 0:
-        positions.append((paste_x, paste_y + height))
+        # Shape extends beyond top edge, draw wrapped version at bottom
+        draw_cropped_shape(img, shape_img, paste_x, paste_y + height, width, height)
     elif paste_y + shape_height > height:
-        positions.append((paste_x, paste_y - height))
+        # Shape extends beyond bottom edge, draw wrapped version at top
+        draw_cropped_shape(img, shape_img, paste_x, paste_y - height, width, height)
     
-    # Handle corner wrapping (both horizontal and vertical)
+    # Handle corner tiling (only if shape extends in both directions)
     if paste_x < 0 and paste_y < 0:
-        positions.append((paste_x + width, paste_y + height))
+        draw_cropped_shape(img, shape_img, paste_x + width, paste_y + height, width, height)
     elif paste_x < 0 and paste_y + shape_height > height:
-        positions.append((paste_x + width, paste_y - height))
+        draw_cropped_shape(img, shape_img, paste_x + width, paste_y - height, width, height)
     elif paste_x + shape_width > width and paste_y < 0:
-        positions.append((paste_x - width, paste_y + height))
+        draw_cropped_shape(img, shape_img, paste_x - width, paste_y + height, width, height)
     elif paste_x + shape_width > width and paste_y + shape_height > height:
-        positions.append((paste_x - width, paste_y - height))
+        draw_cropped_shape(img, shape_img, paste_x - width, paste_y - height, width, height)
+
+def draw_cropped_shape(img, shape_img, paste_x, paste_y, width, height):
+    """Draw a shape, cropping it to fit within the canvas boundaries."""
+    shape_width = shape_img.width
+    shape_height = shape_img.height
     
-    # Draw the shape at all calculated positions
-    for pos_x, pos_y in positions:
-        # Only draw if the shape would be visible within the canvas
-        if (pos_x + shape_width > 0 and pos_x < width and 
-            pos_y + shape_height > 0 and pos_y < height):
-            
-            # Create a cropped version of the shape if it extends beyond canvas
-            if (pos_x < 0 or pos_y < 0 or 
-                pos_x + shape_width > width or pos_y + shape_height > height):
-                
-                # Calculate crop boundaries
-                crop_left = max(0, -pos_x)
-                crop_top = max(0, -pos_y)
-                crop_right = min(shape_width, width - pos_x)
-                crop_bottom = min(shape_height, height - pos_y)
-                
-                if crop_right > crop_left and crop_bottom > crop_top:
-                    cropped_shape = shape_img.crop((crop_left, crop_top, crop_right, crop_bottom))
-                    final_x = max(0, pos_x)
-                    final_y = max(0, pos_y)
-                    img.paste(cropped_shape, (final_x, final_y), cropped_shape)
-            else:
-                # Shape fits entirely within canvas
-                img.paste(shape_img, (pos_x, pos_y), shape_img)
+    # Calculate the intersection of the shape with the canvas
+    left = max(0, paste_x)
+    top = max(0, paste_y)
+    right = min(width, paste_x + shape_width)
+    bottom = min(height, paste_y + shape_height)
+    
+    # Only draw if there's a visible area
+    if right > left and bottom > top:
+        # Calculate what part of the shape to use
+        shape_left = left - paste_x
+        shape_top = top - paste_y
+        shape_right = shape_left + (right - left)
+        shape_bottom = shape_top + (bottom - top)
+        
+        # Extract the visible part of the shape
+        visible_shape = shape_img.crop((shape_left, shape_top, shape_right, shape_bottom))
+        
+        # Paste it onto the canvas
+        img.paste(visible_shape, (left, top), visible_shape)
 
 if __name__ == "__main__":
     # Example usage:
