@@ -709,8 +709,13 @@ class PatternGeneratorApp(QMainWindow):
             self.columns_spin.setValue(int(data.get("columns", self.columns_spin.value())))
             self.rows_spin.setValue(int(data.get("rows", self.rows_spin.value())))
             self.pattern_combo.setCurrentText(str(data.get("pattern_type", self.pattern_type)))
-            self.shape_combo.setCurrentText(str(data.get("shape_type", self.shape_type)))
+            # Set custom image path before changing shape to avoid prompting selector
             self.custom_image_path = str(data.get("custom_image_path", self.custom_image_path or ""))
+            shape_text = str(data.get("shape_type", self.shape_type))
+            self.shape_combo.blockSignals(True)
+            self.shape_combo.setCurrentText(shape_text)
+            self.shape_combo.blockSignals(False)
+            self.shape_type = shape_text
             bg = data.get("bg_color")
             if isinstance(bg, (list, tuple)) and len(bg) >= 3:
                 self.bg_color = (int(bg[0]), int(bg[1]), int(bg[2]), int(bg[3]) if len(bg) > 3 else 255)
