@@ -17,7 +17,7 @@ class ZoomablePreviewLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setMinimumSize(400, 400)
+        self.setMinimumSize(600, 600)
         self.setStyleSheet("background-color: lightgrey;")
         
         # Pan and zoom attributes
@@ -147,6 +147,10 @@ class PatternGeneratorApp(QMainWindow):
         self.base_rotation = 0.0
         self.rotation_randomization = 0.0
         self.output_file = "pattern.png"
+        self.column_rotations = []
+        self.row_rotations = []
+        self.column_rotation_spins = []
+        self.row_rotation_spins = []
         
         # Preview settings
         self.preview_img = None
@@ -276,8 +280,8 @@ class PatternGeneratorApp(QMainWindow):
         # === Left panel for controls ===
         controls_scroll = QScrollArea()
         controls_scroll.setWidgetResizable(True)
-        controls_scroll.setMinimumWidth(450)
-        controls_scroll.setMaximumWidth(400)
+        controls_scroll.setMinimumWidth(800)
+        controls_scroll.setMaximumWidth(1200)
         
         controls_widget = QWidget()
         controls_layout = QVBoxLayout(controls_widget)
@@ -334,14 +338,14 @@ class PatternGeneratorApp(QMainWindow):
         self.columns_spin = QSpinBox()
         self.columns_spin.setRange(1, 500)
         self.columns_spin.setValue(self.columns)
-        self.columns_spin.valueChanged.connect(self.schedule_preview_update)
+        self.columns_spin.valueChanged.connect(self.on_columns_changed)
         shape_layout.addWidget(self.columns_spin, 3, 1)
         
         shape_layout.addWidget(QLabel("Rows:"), 4, 0)
         self.rows_spin = QSpinBox()
         self.rows_spin.setRange(1, 500)
         self.rows_spin.setValue(self.rows)
-        self.rows_spin.valueChanged.connect(self.schedule_preview_update)
+        self.rows_spin.valueChanged.connect(self.on_rows_changed)
         shape_layout.addWidget(self.rows_spin, 4, 1)
         
         self.custom_img_btn = QPushButton("Custom Image...")
@@ -349,6 +353,14 @@ class PatternGeneratorApp(QMainWindow):
         shape_layout.addWidget(self.custom_img_btn, 5, 0, 1, 2)
         
         controls_layout.addWidget(shape_group)
+        
+        self.col_rot_group = QGroupBox("Column Rotations")
+        self.col_rot_layout = QGridLayout(self.col_rot_group)
+        controls_layout.addWidget(self.col_rot_group)
+        
+        self.row_rot_group = QGroupBox("Row Rotations")
+        self.row_rot_layout = QGridLayout(self.row_rot_group)
+        controls_layout.addWidget(self.row_rot_group)
         
         # === Pattern type controls ===
         pattern_group = QGroupBox("Pattern Settings")
@@ -462,6 +474,9 @@ class PatternGeneratorApp(QMainWindow):
         # Add controls scroll and preview to main layout
         main_layout.addWidget(controls_scroll)
         main_layout.addWidget(preview_group, 1)  # Preview takes more space
+        
+        self.on_columns_changed()
+        self.on_rows_changed()
     
     # === Event handlers ===
     def on_shape_changed(self, text):
@@ -526,6 +541,10 @@ class PatternGeneratorApp(QMainWindow):
         self.shape_height = self.shape_height_spin.value()
         self.rows = self.rows_spin.value()
         self.columns = self.columns_spin.value()
+        if self.column_rotation_spins:
+            self.column_rotations = [spin.value() for spin in self.column_rotation_spins]
+        if self.row_rotation_spins:
+            self.row_rotations = [spin.value() for spin in self.row_rotation_spins]
         self.output_file = self.output_edit.text()
         
         print(f"schedule_preview_update called: width={self.width}, height={self.height}")  # Debug print
@@ -564,7 +583,11 @@ class PatternGeneratorApp(QMainWindow):
                 scale_randomization=self.scale_randomization,
                 base_rotation=self.base_rotation,
                 rotation_randomization=self.rotation_randomization,
-                output_file=temp_output
+                output_file=temp_output,
+                column_rotations=self.column_rotations,
+                row_rotations=self.row_rotations,
+                columns=self.columns,
+                rows=self.rows
             )
             
             # Load the preview image
@@ -615,7 +638,11 @@ class PatternGeneratorApp(QMainWindow):
                 scale_randomization=self.scale_randomization,
                 base_rotation=self.base_rotation,
                 rotation_randomization=self.rotation_randomization,
-                output_file=output_file
+                output_file=output_file,
+                column_rotations=self.column_rotations,
+                row_rotations=self.row_rotations,
+                columns=self.columns,
+                rows=self.rows
             )
             
             # Show success message
@@ -623,6 +650,54 @@ class PatternGeneratorApp(QMainWindow):
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error generating pattern: {str(e)}")
+
+    def on_columns_changed(self):
+        self.columns = self.columns_spin.value()
+        self.rebuild_column_rotation_controls()
+        self.schedule_preview_update()
+
+    def on_rows_changed(self):
+        self.rows = self.rows_spin.value()
+        self.rebuild_row_rotation_controls()
+        self.schedule_preview_update()
+
+    def rebuild_column_rotation_controls(self):
+        while self.col_rot_layout.count():
+            item = self.col_rot_layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+        self.column_rotation_spins = []
+        values = self.column_rotations if self.column_rotations else [0] * self.columns
+        for i in range(self.columns):
+            label = QLabel(f"Col {i}:")
+            spin = QSpinBox()
+            spin.setRange(0, 360)
+            spin.setValue(values[i] if i < len(values) else 0)
+            spin.valueChanged.connect(self.schedule_preview_update)
+            self.col_rot_layout.addWidget(label, i // 4, (i % 4) * 2)
+            self.col_rot_layout.addWidget(spin, i // 4, (i % 4) * 2 + 1)
+            self.column_rotation_spins.append(spin)
+        self.column_rotations = [spin.value() for spin in self.column_rotation_spins]
+
+    def rebuild_row_rotation_controls(self):
+        while self.row_rot_layout.count():
+            item = self.row_rot_layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+        self.row_rotation_spins = []
+        values = self.row_rotations if self.row_rotations else [0] * self.rows
+        for i in range(self.rows):
+            label = QLabel(f"Row {i}:")
+            spin = QSpinBox()
+            spin.setRange(0, 360)
+            spin.setValue(values[i] if i < len(values) else 0)
+            spin.valueChanged.connect(self.schedule_preview_update)
+            self.row_rot_layout.addWidget(label, i // 4, (i % 4) * 2)
+            self.row_rot_layout.addWidget(spin, i // 4, (i % 4) * 2 + 1)
+            self.row_rotation_spins.append(spin)
+        self.row_rotations = [spin.value() for spin in self.row_rotation_spins]
 
 # Main execution
 if __name__ == "__main__":

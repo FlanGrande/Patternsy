@@ -52,7 +52,11 @@ def create_pattern(
         rotation_randomization=0.0,
         output_file="pattern.png",
         antialiasing=True,
-        aa_scale=4
+        aa_scale=4,
+        column_rotations=None,
+        row_rotations=None,
+        columns=None,
+        rows=None
 ):
     """
     Create a seamlessly tiling pattern with various shapes and arrangements.
@@ -108,6 +112,15 @@ def create_pattern(
         aa_width, aa_height, aa_spacing_x, aa_spacing_y, pattern_type
     )
     
+    if columns is None:
+        columns_count = max(1, aa_width // aa_spacing_x) if aa_spacing_x else 1
+    else:
+        columns_count = max(1, int(columns))
+    if rows is None:
+        rows_count = max(1, aa_height // aa_spacing_y) if aa_spacing_y else 1
+    else:
+        rows_count = max(1, int(rows))
+    
     max_shape_size = max(aa_shape_width, aa_shape_height)
     
     for x, y in coordinates:
@@ -121,11 +134,27 @@ def create_pattern(
             current_shape_width = aa_shape_width
             current_shape_height = aa_shape_height
             
+        if aa_spacing_y:
+            row_idx = int(math.floor((y - aa_spacing_y / 2) / aa_spacing_y))
+        else:
+            row_idx = 0
+        if aa_spacing_x:
+            col_idx = int(math.floor((x - aa_spacing_x / 2) / aa_spacing_x))
+        else:
+            col_idx = 0
+        row_idx = row_idx % rows_count if rows_count > 0 else 0
+        col_idx = col_idx % columns_count if columns_count > 0 else 0
+        
+        current_rotation = base_rotation
+        if column_rotations:
+            if len(column_rotations) > 0:
+                current_rotation += column_rotations[col_idx % len(column_rotations)]
+        if row_rotations:
+            if len(row_rotations) > 0:
+                current_rotation += row_rotations[row_idx % len(row_rotations)]
         if rotation_randomization > 0:
             rotation_range = 360 * rotation_randomization
-            current_rotation = base_rotation + random.uniform(-rotation_range/2, rotation_range/2)
-        else:
-            current_rotation = base_rotation
+            current_rotation += random.uniform(-rotation_range/2, rotation_range/2)
         
         shape_img = create_shape(
             shape_type, current_shape_width, current_shape_height, fg_color, current_rotation, 
