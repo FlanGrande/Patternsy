@@ -11,6 +11,7 @@ from PyQt6.QtCore import Qt, QPoint, QSize
 from PIL import Image, ImageQt
 import time
 import re
+import json
 from patternsy import create_pattern
 
 class ZoomablePreviewLabel(QLabel):
@@ -426,6 +427,15 @@ class PatternGeneratorApp(QMainWindow):
         
         controls_layout.addWidget(output_group)
         
+        file_buttons_layout = QHBoxLayout()
+        self.save_btn = QPushButton("Save Settings")
+        self.save_btn.clicked.connect(self.save_settings)
+        file_buttons_layout.addWidget(self.save_btn)
+        self.load_btn = QPushButton("Load Settings")
+        self.load_btn.clicked.connect(self.load_settings)
+        file_buttons_layout.addWidget(self.load_btn)
+        controls_layout.addLayout(file_buttons_layout)
+        
         # Generate button
         self.generate_btn = QPushButton("Generate Pattern")
         self.generate_btn.clicked.connect(self.generate_pattern)
@@ -650,6 +660,85 @@ class PatternGeneratorApp(QMainWindow):
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error generating pattern: {str(e)}")
+
+    def save_settings(self):
+        try:
+            self.schedule_preview_update()
+            data = {
+                "width": self.width,
+                "height": self.height,
+                "shape_width": self.shape_width,
+                "shape_height": self.shape_height,
+                "rows": self.rows,
+                "columns": self.columns,
+                "pattern_type": self.pattern_type,
+                "shape_type": self.shape_type,
+                "custom_image_path": self.custom_image_path,
+                "bg_color": list(self.bg_color),
+                "fg_color": list(self.fg_color),
+                "scale_randomization": self.scale_randomization,
+                "base_rotation": self.base_rotation,
+                "rotation_randomization": self.rotation_randomization,
+                "output_file": self.output_file,
+                "column_rotations": self.column_rotations,
+                "row_rotations": self.row_rotations,
+            }
+            path, _ = QFileDialog.getSaveFileName(self, "Save Settings", "", "JSON files (*.json);;All files (*.*)")
+            if path:
+                if not path.lower().endswith('.json'):
+                    path += '.json'
+                with open(path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2)
+                QMessageBox.information(self, "Saved", f"Settings saved to '{os.path.basename(path)}'.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error saving settings: {str(e)}")
+
+    def load_settings(self):
+        try:
+            path, _ = QFileDialog.getOpenFileName(self, "Load Settings", "", "JSON files (*.json);;All files (*.*)")
+            if not path:
+                return
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            self.width = int(data.get("width", self.width))
+            self.height = int(data.get("height", self.height))
+            self.width_edit.setText(str(self.width))
+            self.height_edit.setText(str(self.height))
+            self.shape_width_spin.setValue(int(data.get("shape_width", self.shape_width_spin.value())))
+            self.shape_height_spin.setValue(int(data.get("shape_height", self.shape_height_spin.value())))
+            self.columns_spin.setValue(int(data.get("columns", self.columns_spin.value())))
+            self.rows_spin.setValue(int(data.get("rows", self.rows_spin.value())))
+            self.pattern_combo.setCurrentText(str(data.get("pattern_type", self.pattern_type)))
+            self.shape_combo.setCurrentText(str(data.get("shape_type", self.shape_type)))
+            self.custom_image_path = str(data.get("custom_image_path", self.custom_image_path or ""))
+            bg = data.get("bg_color")
+            if isinstance(bg, (list, tuple)) and len(bg) >= 3:
+                self.bg_color = (int(bg[0]), int(bg[1]), int(bg[2]), int(bg[3]) if len(bg) > 3 else 255)
+                self.bg_color_btn.setText(f"Background: #{self.bg_color[0]:02x}{self.bg_color[1]:02x}{self.bg_color[2]:02x}")
+            fg = data.get("fg_color")
+            if isinstance(fg, (list, tuple)) and len(fg) >= 3:
+                self.fg_color = (int(fg[0]), int(fg[1]), int(fg[2]), int(fg[3]) if len(fg) > 3 else 255)
+                self.fg_color_btn.setText(f"Foreground: #{self.fg_color[0]:02x}{self.fg_color[1]:02x}{self.fg_color[2]:02x}")
+            self.scale_randomization = float(data.get("scale_randomization", self.scale_randomization))
+            self.scale_random_slider.setValue(int(self.scale_randomization * 100))
+            self.base_rotation = float(data.get("base_rotation", self.base_rotation))
+            self.rotation_slider.setValue(int(self.base_rotation))
+            self.rotation_randomization = float(data.get("rotation_randomization", self.rotation_randomization))
+            self.rotation_random_slider.setValue(int(self.rotation_randomization * 100))
+            self.output_file = str(data.get("output_file", self.output_edit.text()))
+            self.output_edit.setText(self.output_file)
+            self.column_rotations = list(data.get("column_rotations", self.column_rotations or []))
+            self.row_rotations = list(data.get("row_rotations", self.row_rotations or []))
+            self.rebuild_column_rotation_controls()
+            self.rebuild_row_rotation_controls()
+            for i, spin in enumerate(self.column_rotation_spins):
+                spin.setValue(int(self.column_rotations[i]) if i < len(self.column_rotations) else 0)
+            for i, spin in enumerate(self.row_rotation_spins):
+                spin.setValue(int(self.row_rotations[i]) if i < len(self.row_rotations) else 0)
+            self.schedule_preview_update()
+            QMessageBox.information(self, "Loaded", f"Settings loaded from '{os.path.basename(path)}'.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error loading settings: {str(e)}")
 
     def on_columns_changed(self):
         self.columns = self.columns_spin.value()
