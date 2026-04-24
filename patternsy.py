@@ -57,7 +57,8 @@ def create_pattern(
         row_rotations=None,
         columns=None,
         rows=None,
-        diagonal_offset_x=0
+        diagonal_offset_x=0,
+        no_save=False
 ):
     """
     Create a seamlessly tiling pattern with various shapes and arrangements.
@@ -80,6 +81,7 @@ def create_pattern(
     - antialiasing: whether to apply antialiasing to the whole image
     - aa_scale: antialiasing scale factor (higher = better quality, slower)
     - diagonal_offset_x: horizontal offset per row for diagonal_grid pattern (can be negative)
+    - no_save: if True, skip saving to disk and just return the image (useful for in-memory preview)
     """
     
     if shape_width is None:
@@ -174,8 +176,9 @@ def create_pattern(
         img = img.filter(ImageFilter.GaussianBlur(radius=0.3))
     
     img = img.convert("RGB")
-    img.save(output_file)
-    print(f"Pattern saved as {output_file}")
+    if not no_save:
+        img.save(output_file)
+        print(f"Pattern saved as {output_file}")
     return img
 
 def generate_pattern_coordinates(width, height, spacing_x, spacing_y, pattern_type, diagonal_offset_x=0):
