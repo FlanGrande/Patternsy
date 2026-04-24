@@ -5,7 +5,7 @@ Patternsy is a pattern generation tool that allows you to create various visual 
 ## Features
 
 - Create patterns with different shapes: circles, squares, triangles, stars, or custom images
-- Arrange shapes in different patterns: grid, offset grid, random, or spiral
+- Arrange shapes in different patterns: grid, offset grid, diagonal grid, random, or spiral
 - Adjust size, spacing, rotation, and randomness parameters
 - Choose custom colors for background and foreground
 - Live preview of your pattern as you adjust settings
@@ -36,7 +36,8 @@ The GUI provides:
 1. **Settings Panel** (left side):
    - Dimensions: Set the width and height of the output image
    - Shape Settings: Choose shape type, base scale, and spacing
-   - Pattern Settings: Select the arrangement pattern
+   - Pattern Settings: Select the arrangement pattern (grid, offset grid, diagonal grid, random, spiral)
+   - Diagonal Grid: For diagonal_grid pattern, adjust the horizontal offset per row
    - Randomization: Control scale and rotation randomness
    - Colors: Set background and foreground colors
    - Output: Specify the output filename
@@ -54,6 +55,14 @@ The repository includes some example patterns:
 - `my_polka_pattern.png`: Basic polka dot pattern
 - `random_triangles.png`: Randomly distributed triangles
 - `spiral_stars.png`: Stars arranged in a spiral pattern
+
+## Pattern Types Explained
+
+- **Grid**: Regular grid arrangement with evenly spaced shapes
+- **Offset Grid**: Every other row is offset by half the spacing, creating a brick-like pattern
+- **Diagonal Grid**: Grid pattern where each row is offset horizontally by a configurable amount, creating diagonal lines. Use the "Diagonal Offset X" control to adjust the offset per row (can be negative to offset in the opposite direction)
+- **Random**: Randomly distributed shapes with minimum spacing constraints
+- **Spiral**: Shapes arranged in a spiral pattern from center outward
 
 ## Requirements
 

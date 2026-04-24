@@ -56,7 +56,8 @@ def create_pattern(
         column_rotations=None,
         row_rotations=None,
         columns=None,
-        rows=None
+        rows=None,
+        diagonal_offset_x=0
 ):
     """
     Create a seamlessly tiling pattern with various shapes and arrangements.
@@ -67,7 +68,7 @@ def create_pattern(
     - shape_width, shape_height: specific width and height of shapes (overrides base_scale)
     - spacing: distance between shapes (for backward compatibility)
     - spacing_x, spacing_y: horizontal and vertical spacing between shapes (overrides spacing)
-    - pattern_type: "grid", "offset_grid", "random", "spiral"
+    - pattern_type: "grid", "offset_grid", "diagonal_grid", "random", "spiral"
     - shape_type: "circle", "square", "triangle", "star", "custom"
     - custom_image_path: path to custom image (used when shape_type="custom")
     - bg_color: background color as (R,G,B,A) tuple
@@ -78,6 +79,7 @@ def create_pattern(
     - output_file: filename for the output image
     - antialiasing: whether to apply antialiasing to the whole image
     - aa_scale: antialiasing scale factor (higher = better quality, slower)
+    - diagonal_offset_x: horizontal offset per row for diagonal_grid pattern (can be negative)
     """
     
     if shape_width is None:
@@ -109,7 +111,7 @@ def create_pattern(
     img = Image.new("RGBA", (aa_width, aa_height), bg_color)
     
     coordinates = generate_pattern_coordinates(
-        aa_width, aa_height, aa_spacing_x, aa_spacing_y, pattern_type
+        aa_width, aa_height, aa_spacing_x, aa_spacing_y, pattern_type, diagonal_offset_x
     )
     
     if columns is None:
@@ -176,7 +178,7 @@ def create_pattern(
     print(f"Pattern saved as {output_file}")
     return img
 
-def generate_pattern_coordinates(width, height, spacing_x, spacing_y, pattern_type):
+def generate_pattern_coordinates(width, height, spacing_x, spacing_y, pattern_type, diagonal_offset_x=0):
     """Generate coordinates for shapes based on the specified pattern type with seamless tiling support."""
     coordinates = []
     
@@ -198,6 +200,20 @@ def generate_pattern_coordinates(width, height, spacing_x, spacing_y, pattern_ty
                 # Regular row
                 for x in range(spacing_x // 2, width, spacing_x):
                     coordinates.append((x, y))
+                
+    elif pattern_type == "diagonal_grid":
+        # Grid pattern with each row offset by diagonal_offset_x pixels
+        # Offset wraps seamlessly using modulo to keep within bounds
+        for row_index, y in enumerate(range(spacing_y // 2, height, spacing_y)):
+            # Calculate row offset that wraps around spacing_x
+            if spacing_x > 0:
+                row_offset = (row_index * diagonal_offset_x) % spacing_x
+            else:
+                row_offset = 0
+            
+            # Generate x positions for this row with diagonal offset
+            for x in range(spacing_x // 2 + row_offset, width + spacing_x, spacing_x):
+                coordinates.append((x, y))
                 
     elif pattern_type == "random":
         # Random distribution with tiling considerations

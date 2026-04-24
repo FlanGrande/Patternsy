@@ -152,6 +152,7 @@ class PatternGeneratorApp(QMainWindow):
         self.row_rotations = []
         self.column_rotation_spins = []
         self.row_rotation_spins = []
+        self.diagonal_offset_x = 0
         
         # Preview settings
         self.preview_img = None
@@ -369,10 +370,17 @@ class PatternGeneratorApp(QMainWindow):
         
         pattern_layout.addWidget(QLabel("Pattern Type:"), 0, 0)
         self.pattern_combo = QComboBox()
-        self.pattern_combo.addItems(["grid", "offset_grid", "random", "spiral"])
+        self.pattern_combo.addItems(["grid", "offset_grid", "diagonal_grid", "random", "spiral"])
         self.pattern_combo.setCurrentText(self.pattern_type)
         self.pattern_combo.currentTextChanged.connect(self.on_pattern_changed)
         pattern_layout.addWidget(self.pattern_combo, 0, 1)
+        
+        pattern_layout.addWidget(QLabel("Diagonal Offset X:"), 1, 0)
+        self.diagonal_offset_x_spin = QSpinBox()
+        self.diagonal_offset_x_spin.setRange(-4096, 4096)
+        self.diagonal_offset_x_spin.setValue(self.diagonal_offset_x)
+        self.diagonal_offset_x_spin.valueChanged.connect(self.schedule_preview_update)
+        pattern_layout.addWidget(self.diagonal_offset_x_spin, 1, 1)
         
         controls_layout.addWidget(pattern_group)
         
@@ -551,6 +559,7 @@ class PatternGeneratorApp(QMainWindow):
         self.shape_height = self.shape_height_spin.value()
         self.rows = self.rows_spin.value()
         self.columns = self.columns_spin.value()
+        self.diagonal_offset_x = self.diagonal_offset_x_spin.value()
         if self.column_rotation_spins:
             self.column_rotations = [spin.value() for spin in self.column_rotation_spins]
         if self.row_rotation_spins:
@@ -597,7 +606,8 @@ class PatternGeneratorApp(QMainWindow):
                 column_rotations=self.column_rotations,
                 row_rotations=self.row_rotations,
                 columns=self.columns,
-                rows=self.rows
+                rows=self.rows,
+                diagonal_offset_x=self.diagonal_offset_x
             )
             
             # Load the preview image
@@ -652,7 +662,8 @@ class PatternGeneratorApp(QMainWindow):
                 column_rotations=self.column_rotations,
                 row_rotations=self.row_rotations,
                 columns=self.columns,
-                rows=self.rows
+                rows=self.rows,
+                diagonal_offset_x=self.diagonal_offset_x
             )
             
             # Show success message
@@ -682,6 +693,7 @@ class PatternGeneratorApp(QMainWindow):
                 "output_file": self.output_file,
                 "column_rotations": self.column_rotations,
                 "row_rotations": self.row_rotations,
+                "diagonal_offset_x": self.diagonal_offset_x,
             }
             path, _ = QFileDialog.getSaveFileName(self, "Save Settings", "", "JSON files (*.json);;All files (*.*)")
             if path:
@@ -734,6 +746,8 @@ class PatternGeneratorApp(QMainWindow):
             self.output_edit.setText(self.output_file)
             self.column_rotations = list(data.get("column_rotations", self.column_rotations or []))
             self.row_rotations = list(data.get("row_rotations", self.row_rotations or []))
+            self.diagonal_offset_x = int(data.get("diagonal_offset_x", self.diagonal_offset_x))
+            self.diagonal_offset_x_spin.setValue(self.diagonal_offset_x)
             self.rebuild_column_rotation_controls()
             self.rebuild_row_rotation_controls()
             for i, spin in enumerate(self.column_rotation_spins):
