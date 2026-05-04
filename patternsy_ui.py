@@ -2,9 +2,10 @@
 
 import os
 import sys
+import random as _random
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                             QLabel, QSpinBox, QComboBox, QPushButton, QFileDialog, 
-                            QSlider, QLineEdit, QGroupBox, QGridLayout, QMessageBox,
+                            QLineEdit, QGroupBox, QGridLayout, QMessageBox,
                             QScrollArea, QColorDialog, QToolButton)
 from PyQt6.QtGui import QPixmap, QImage, QColor, QMouseEvent, QWheelEvent, QKeyEvent, QPainter, QIcon
 from PyQt6.QtCore import Qt, QPoint, QSize
@@ -153,6 +154,8 @@ class PatternGeneratorApp(QMainWindow):
         self.column_rotation_spins = []
         self.row_rotation_spins = []
         self.diagonal_offset_x = 0
+        self.random_seed = 0
+        self.point_jitter = 0
         
         # Preview settings
         self.preview_img = None
@@ -389,25 +392,39 @@ class PatternGeneratorApp(QMainWindow):
         random_layout = QGridLayout(random_group)
         
         random_layout.addWidget(QLabel("Scale Random:"), 0, 0)
-        self.scale_random_slider = QSlider(Qt.Orientation.Horizontal)
-        self.scale_random_slider.setRange(0, 100)
-        self.scale_random_slider.setValue(int(self.scale_randomization * 100))
-        self.scale_random_slider.sliderReleased.connect(self.on_scale_random_changed)
-        random_layout.addWidget(self.scale_random_slider, 0, 1)
+        self.scale_random_edit = QLineEdit(f"{self.scale_randomization:.3f}")
+        self.scale_random_edit.setPlaceholderText("0.0 – 1.0")
+        self.scale_random_edit.textChanged.connect(self.on_scale_random_changed)
+        random_layout.addWidget(self.scale_random_edit, 0, 1)
         
         random_layout.addWidget(QLabel("Base Rotation:"), 1, 0)
-        self.rotation_slider = QSlider(Qt.Orientation.Horizontal)
-        self.rotation_slider.setRange(0, 360)
-        self.rotation_slider.setValue(int(self.base_rotation))
-        self.rotation_slider.sliderReleased.connect(self.on_rotation_changed)
-        random_layout.addWidget(self.rotation_slider, 1, 1)
+        self.rotation_edit = QLineEdit(f"{self.base_rotation:.1f}")
+        self.rotation_edit.setPlaceholderText("0 – 360")
+        self.rotation_edit.textChanged.connect(self.on_rotation_changed)
+        random_layout.addWidget(self.rotation_edit, 1, 1)
         
         random_layout.addWidget(QLabel("Rotation Random:"), 2, 0)
-        self.rotation_random_slider = QSlider(Qt.Orientation.Horizontal)
-        self.rotation_random_slider.setRange(0, 100)
-        self.rotation_random_slider.setValue(int(self.rotation_randomization * 100))
-        self.rotation_random_slider.sliderReleased.connect(self.on_rotation_random_changed)
-        random_layout.addWidget(self.rotation_random_slider, 2, 1)
+        self.rotation_random_edit = QLineEdit(f"{self.rotation_randomization:.3f}")
+        self.rotation_random_edit.setPlaceholderText("0.0 – 1.0")
+        self.rotation_random_edit.textChanged.connect(self.on_rotation_random_changed)
+        random_layout.addWidget(self.rotation_random_edit, 2, 1)
+        
+        random_layout.addWidget(QLabel("Point Jitter:"), 3, 0)
+        self.point_jitter_edit = QLineEdit(str(self.point_jitter))
+        self.point_jitter_edit.setPlaceholderText("max pixel offset")
+        self.point_jitter_edit.textChanged.connect(self.on_point_jitter_changed)
+        random_layout.addWidget(self.point_jitter_edit, 3, 1)
+        
+        random_layout.addWidget(QLabel("Seed:"), 4, 0)
+        seed_row = QHBoxLayout()
+        self.seed_edit = QLineEdit(str(self.random_seed))
+        self.seed_edit.setPlaceholderText("integer seed")
+        self.seed_edit.textChanged.connect(self.on_seed_changed)
+        seed_row.addWidget(self.seed_edit)
+        self.new_seed_btn = QPushButton("New Seed")
+        self.new_seed_btn.clicked.connect(self.on_new_seed)
+        seed_row.addWidget(self.new_seed_btn)
+        random_layout.addLayout(seed_row, 4, 1)
         
         controls_layout.addWidget(random_group)
         
@@ -511,15 +528,47 @@ class PatternGeneratorApp(QMainWindow):
         self.schedule_preview_update()
     
     def on_scale_random_changed(self):
-        self.scale_randomization = self.scale_random_slider.value() / 100.0
+        try:
+            v = float(self.scale_random_edit.text())
+            self.scale_randomization = max(0.0, min(1.0, v))
+        except ValueError:
+            pass
         self.schedule_preview_update()
     
     def on_rotation_changed(self):
-        self.base_rotation = self.rotation_slider.value()
+        try:
+            v = float(self.rotation_edit.text())
+            self.base_rotation = max(0.0, min(360.0, v))
+        except ValueError:
+            pass
         self.schedule_preview_update()
     
     def on_rotation_random_changed(self):
-        self.rotation_randomization = self.rotation_random_slider.value() / 100.0
+        try:
+            v = float(self.rotation_random_edit.text())
+            self.rotation_randomization = max(0.0, min(1.0, v))
+        except ValueError:
+            pass
+        self.schedule_preview_update()
+    
+    def on_seed_changed(self):
+        try:
+            self.random_seed = int(self.seed_edit.text())
+        except ValueError:
+            pass
+        self.schedule_preview_update()
+    
+    def on_new_seed(self):
+        new_seed = _random.randint(0, 2**31 - 1)
+        # Setting text triggers on_seed_changed → schedule_preview_update
+        self.seed_edit.setText(str(new_seed))
+    
+    def on_point_jitter_changed(self):
+        try:
+            v = int(self.point_jitter_edit.text())
+            self.point_jitter = max(0, v)
+        except ValueError:
+            pass
         self.schedule_preview_update()
     
     def select_bg_color(self):
@@ -565,8 +614,6 @@ class PatternGeneratorApp(QMainWindow):
         if self.row_rotation_spins:
             self.row_rotations = [spin.value() for spin in self.row_rotation_spins]
         self.output_file = self.output_edit.text()
-        
-        print(f"schedule_preview_update called: width={self.width}, height={self.height}")  # Debug print
         self.update_preview()
 
     def update_preview(self):
@@ -607,7 +654,9 @@ class PatternGeneratorApp(QMainWindow):
                 row_rotations=self.row_rotations,
                 columns=self.columns,
                 rows=self.rows,
-                diagonal_offset_x=self.diagonal_offset_x
+                diagonal_offset_x=self.diagonal_offset_x,
+                random_seed=self.random_seed,
+                point_jitter=self.point_jitter
             )
             
             # Load the preview image
@@ -663,7 +712,9 @@ class PatternGeneratorApp(QMainWindow):
                 row_rotations=self.row_rotations,
                 columns=self.columns,
                 rows=self.rows,
-                diagonal_offset_x=self.diagonal_offset_x
+                diagonal_offset_x=self.diagonal_offset_x,
+                random_seed=self.random_seed,
+                point_jitter=self.point_jitter
             )
             
             # Show success message
@@ -694,6 +745,8 @@ class PatternGeneratorApp(QMainWindow):
                 "column_rotations": self.column_rotations,
                 "row_rotations": self.row_rotations,
                 "diagonal_offset_x": self.diagonal_offset_x,
+                "random_seed": self.random_seed,
+                "point_jitter": self.point_jitter,
             }
             path, _ = QFileDialog.getSaveFileName(self, "Save Settings", "", "JSON files (*.json);;All files (*.*)")
             if path:
@@ -736,24 +789,44 @@ class PatternGeneratorApp(QMainWindow):
             if isinstance(fg, (list, tuple)) and len(fg) >= 3:
                 self.fg_color = (int(fg[0]), int(fg[1]), int(fg[2]), int(fg[3]) if len(fg) > 3 else 255)
                 self.fg_color_btn.setText(f"Foreground: #{self.fg_color[0]:02x}{self.fg_color[1]:02x}{self.fg_color[2]:02x}")
-            self.scale_randomization = float(data.get("scale_randomization", self.scale_randomization))
-            self.scale_random_slider.setValue(int(self.scale_randomization * 100))
-            self.base_rotation = float(data.get("base_rotation", self.base_rotation))
-            self.rotation_slider.setValue(int(self.base_rotation))
-            self.rotation_randomization = float(data.get("rotation_randomization", self.rotation_randomization))
-            self.rotation_random_slider.setValue(int(self.rotation_randomization * 100))
+            self.scale_randomization = max(0.0, min(1.0, float(data.get("scale_randomization", self.scale_randomization))))
+            self.scale_random_edit.blockSignals(True)
+            self.scale_random_edit.setText(f"{self.scale_randomization:.3f}")
+            self.scale_random_edit.blockSignals(False)
+            self.base_rotation = max(0.0, min(360.0, float(data.get("base_rotation", self.base_rotation))))
+            self.rotation_edit.blockSignals(True)
+            self.rotation_edit.setText(f"{self.base_rotation:.1f}")
+            self.rotation_edit.blockSignals(False)
+            self.rotation_randomization = max(0.0, min(1.0, float(data.get("rotation_randomization", self.rotation_randomization))))
+            self.rotation_random_edit.blockSignals(True)
+            self.rotation_random_edit.setText(f"{self.rotation_randomization:.3f}")
+            self.rotation_random_edit.blockSignals(False)
+            self.random_seed = int(data.get("random_seed", self.random_seed))
+            self.seed_edit.blockSignals(True)
+            self.seed_edit.setText(str(self.random_seed))
+            self.seed_edit.blockSignals(False)
+            self.point_jitter = max(0, int(data.get("point_jitter", self.point_jitter)))
+            self.point_jitter_edit.blockSignals(True)
+            self.point_jitter_edit.setText(str(self.point_jitter))
+            self.point_jitter_edit.blockSignals(False)
             self.output_file = str(data.get("output_file", self.output_edit.text()))
             self.output_edit.setText(self.output_file)
-            self.column_rotations = list(data.get("column_rotations", self.column_rotations or []))
-            self.row_rotations = list(data.get("row_rotations", self.row_rotations or []))
             self.diagonal_offset_x = int(data.get("diagonal_offset_x", self.diagonal_offset_x))
             self.diagonal_offset_x_spin.setValue(self.diagonal_offset_x)
-            self.rebuild_column_rotation_controls()
-            self.rebuild_row_rotation_controls()
+            # Spins were rebuilt by columns_spin/rows_spin setValue above (via on_columns_changed
+            # / on_rows_changed). Now populate them with the saved rotation values.
+            col_rotations = list(data.get("column_rotations", []))
+            row_rotations = list(data.get("row_rotations", []))
             for i, spin in enumerate(self.column_rotation_spins):
-                spin.setValue(int(self.column_rotations[i]) if i < len(self.column_rotations) else 0)
+                spin.blockSignals(True)
+                spin.setValue(int(col_rotations[i]) if i < len(col_rotations) else 0)
+                spin.blockSignals(False)
             for i, spin in enumerate(self.row_rotation_spins):
-                spin.setValue(int(self.row_rotations[i]) if i < len(self.row_rotations) else 0)
+                spin.blockSignals(True)
+                spin.setValue(int(row_rotations[i]) if i < len(row_rotations) else 0)
+                spin.blockSignals(False)
+            self.column_rotations = [s.value() for s in self.column_rotation_spins]
+            self.row_rotations = [s.value() for s in self.row_rotation_spins]
             self.schedule_preview_update()
             QMessageBox.information(self, "Loaded", f"Settings loaded from '{os.path.basename(path)}'.")
         except Exception as e:
@@ -781,7 +854,9 @@ class PatternGeneratorApp(QMainWindow):
             label = QLabel(f"Col {i}:")
             spin = QSpinBox()
             spin.setRange(0, 360)
+            spin.blockSignals(True)
             spin.setValue(values[i] if i < len(values) else 0)
+            spin.blockSignals(False)
             spin.valueChanged.connect(self.schedule_preview_update)
             self.col_rot_layout.addWidget(label, i // 4, (i % 4) * 2)
             self.col_rot_layout.addWidget(spin, i // 4, (i % 4) * 2 + 1)
@@ -800,7 +875,9 @@ class PatternGeneratorApp(QMainWindow):
             label = QLabel(f"Row {i}:")
             spin = QSpinBox()
             spin.setRange(0, 360)
+            spin.blockSignals(True)
             spin.setValue(values[i] if i < len(values) else 0)
+            spin.blockSignals(False)
             spin.valueChanged.connect(self.schedule_preview_update)
             self.row_rot_layout.addWidget(label, i // 4, (i % 4) * 2)
             self.row_rot_layout.addWidget(spin, i // 4, (i % 4) * 2 + 1)
