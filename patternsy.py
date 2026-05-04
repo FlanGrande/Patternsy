@@ -189,31 +189,43 @@ def generate_pattern_coordinates(width, height, spacing_x, spacing_y, pattern_ty
                 coordinates.append((x, y))
                 
     elif pattern_type == "offset_grid":
-        # Grid pattern with every other row offset for seamless tiling
+        # Grid pattern with every other row offset for seamless tiling.
+        # Odd rows start one step to the left so all centers stay in [0, width).
+        # draw_shape_with_tiling handles left-edge wrapping for the x≈0 coord.
+        import math as _math
+        n_cols = _math.ceil(width / spacing_x) + 1
         for row_index, y in enumerate(range(spacing_y // 2, height, spacing_y)):
             if row_index % 2 == 1:
-                # Offset row - shift by half spacing
+                # Offset row: shift by half spacing, start one step left to avoid oob
                 row_offset = spacing_x // 2
-                for x in range(spacing_x // 2 + row_offset, width + spacing_x, spacing_x):
-                    coordinates.append((x, y))
+                start = spacing_x // 2 + row_offset - spacing_x
+                for i in range(n_cols):
+                    x = start + i * spacing_x
+                    if 0 <= x < width:
+                        coordinates.append((x, y))
             else:
                 # Regular row
                 for x in range(spacing_x // 2, width, spacing_x):
                     coordinates.append((x, y))
                 
     elif pattern_type == "diagonal_grid":
-        # Grid pattern with each row offset by diagonal_offset_x pixels
-        # Offset wraps seamlessly using modulo to keep within bounds
+        # Grid pattern with each row offset by diagonal_offset_x pixels.
+        # Start one step to the left so all centers stay in [0, width).
+        # draw_shape_with_tiling handles left-edge wrapping for the x≈0 coord.
+        import math as _math
+        n_cols = _math.ceil(width / spacing_x) + 1
         for row_index, y in enumerate(range(spacing_y // 2, height, spacing_y)):
             # Calculate row offset that wraps around spacing_x
             if spacing_x > 0:
                 row_offset = (row_index * diagonal_offset_x) % spacing_x
             else:
                 row_offset = 0
-            
-            # Generate x positions for this row with diagonal offset
-            for x in range(spacing_x // 2 + row_offset, width + spacing_x, spacing_x):
-                coordinates.append((x, y))
+            # Start one step left so no coord falls beyond width
+            start = spacing_x // 2 + row_offset - spacing_x
+            for i in range(n_cols):
+                x = start + i * spacing_x
+                if 0 <= x < width:
+                    coordinates.append((x, y))
                 
     elif pattern_type == "random":
         # Random distribution with tiling considerations
