@@ -57,7 +57,9 @@ def create_pattern(
         row_rotations=None,
         columns=None,
         rows=None,
-        diagonal_offset_x=0
+        diagonal_offset_x=0,
+        random_seed=0,
+        point_jitter=0
 ):
     """
     Create a seamlessly tiling pattern with various shapes and arrangements.
@@ -80,6 +82,8 @@ def create_pattern(
     - antialiasing: whether to apply antialiasing to the whole image
     - aa_scale: antialiasing scale factor (higher = better quality, slower)
     - diagonal_offset_x: horizontal offset per row for diagonal_grid pattern (can be negative)
+    - random_seed: integer seed for reproducible randomization (scale and rotation variation)
+    - point_jitter: max pixel offset applied randomly to each shape's X and Y position (integer)
     """
     
     if shape_width is None:
@@ -125,7 +129,18 @@ def create_pattern(
     
     max_shape_size = max(aa_shape_width, aa_shape_height)
     
+    # Seed the RNG so scale/rotation randomization is reproducible across sessions
+    random.seed(random_seed)
+    
+    # Scale jitter range to match the aa canvas
+    aa_jitter = point_jitter * (aa_scale if antialiasing else 1)
+    
     for x, y in coordinates:
+        # Apply per-point jitter: independent random offset on X and Y
+        if aa_jitter > 0:
+            x = x + random.randint(-aa_jitter, aa_jitter)
+            y = y + random.randint(-aa_jitter, aa_jitter)
+        
         if scale_randomization > 0:
             scale_factor = 1.0 - (scale_randomization * random.uniform(-1, 1))
             current_shape_width = int(aa_shape_width * scale_factor)
@@ -167,6 +182,9 @@ def create_pattern(
         paste_y = int(y - shape_img.height / 2)
         
         draw_shape_with_tiling(img, shape_img, paste_x, paste_y, aa_width, aa_height)
+    
+    # Reset RNG to unpredictable state after render
+    random.seed()
     
     # Apply antialiasing by resizing down
     if antialiasing:
