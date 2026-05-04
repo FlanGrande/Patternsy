@@ -1,0 +1,43 @@
+{
+  "width": 1024,
+  "height": 1024,
+  "shape_width": 64,
+  "shape_height": 64,
+  "rows": 6,
+  "columns": 3,
+  "pattern_type": "diagonal_grid",
+  "shape_type": "custom",
+  "custom_image_path": "/home/Flan/Pictures/FlanIcons/FlanOSLogo.png",
+  "bg_color": [
+    0,
+    0,
+    0,
+    255
+  ],
+  "fg_color": [
+    255,
+    136,
+    0,
+    255
+  ],
+  "scale_randomization": 0.0,
+  "base_rotation": 0.0,
+  "rotation_randomization": 0.3,
+  "output_file": "pattern.png",
+  "column_rotations": [
+    0,
+    135,
+    315
+  ],
+  "row_rotations": [
+    0,
+    45,
+    180,
+    270,
+    0,
+    45
+  ],
+  "diagonal_offset_x": 150,
+  "random_seed": 100,
+  "point_jitter": 4
+}
