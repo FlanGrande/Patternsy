@@ -129,28 +129,15 @@ def create_pattern(
     
     max_shape_size = max(aa_shape_width, aa_shape_height)
     
-    # Seed the RNG so scale/rotation randomization is reproducible across sessions
-    random.seed(random_seed)
+    # Two independent RNG streams so jitter never affects scale/rotation and vice versa
+    rng_style = random.Random(random_seed)        # scale + rotation randomization
+    rng_jitter = random.Random(random_seed ^ 0xDEADBEEF)  # position jitter
     
     # Scale jitter range to match the aa canvas
     aa_jitter = point_jitter * (aa_scale if antialiasing else 1)
     
     for x, y in coordinates:
-        # Apply per-point jitter: independent random offset on X and Y
-        if aa_jitter > 0:
-            x = x + random.randint(-aa_jitter, aa_jitter)
-            y = y + random.randint(-aa_jitter, aa_jitter)
-        
-        if scale_randomization > 0:
-            scale_factor = 1.0 - (scale_randomization * random.uniform(-1, 1))
-            current_shape_width = int(aa_shape_width * scale_factor)
-            current_shape_height = int(aa_shape_height * scale_factor)
-            current_shape_width = max(current_shape_width, 1)
-            current_shape_height = max(current_shape_height, 1)
-        else:
-            current_shape_width = aa_shape_width
-            current_shape_height = aa_shape_height
-            
+        # Compute row/col indices from the ORIGINAL grid position (before jitter)
         if aa_spacing_y:
             row_idx = int(math.floor((y - aa_spacing_y / 2) / aa_spacing_y))
         else:
@@ -161,6 +148,21 @@ def create_pattern(
             col_idx = 0
         row_idx = row_idx % rows_count if rows_count > 0 else 0
         col_idx = col_idx % columns_count if columns_count > 0 else 0
+
+        # Apply per-point jitter using independent RNG stream
+        if aa_jitter > 0:
+            x = x + rng_jitter.randint(-aa_jitter, aa_jitter)
+            y = y + rng_jitter.randint(-aa_jitter, aa_jitter)
+        
+        if scale_randomization > 0:
+            scale_factor = 1.0 - (scale_randomization * rng_style.uniform(-1, 1))
+            current_shape_width = int(aa_shape_width * scale_factor)
+            current_shape_height = int(aa_shape_height * scale_factor)
+            current_shape_width = max(current_shape_width, 1)
+            current_shape_height = max(current_shape_height, 1)
+        else:
+            current_shape_width = aa_shape_width
+            current_shape_height = aa_shape_height
         
         current_rotation = base_rotation
         if column_rotations:
@@ -171,7 +173,7 @@ def create_pattern(
                 current_rotation += row_rotations[row_idx % len(row_rotations)]
         if rotation_randomization > 0:
             rotation_range = 360 * rotation_randomization
-            current_rotation += random.uniform(-rotation_range/2, rotation_range/2)
+            current_rotation += rng_style.uniform(-rotation_range/2, rotation_range/2)
         
         shape_img = create_shape(
             shape_type, current_shape_width, current_shape_height, fg_color, current_rotation, 
@@ -182,9 +184,6 @@ def create_pattern(
         paste_y = int(y - shape_img.height / 2)
         
         draw_shape_with_tiling(img, shape_img, paste_x, paste_y, aa_width, aa_height)
-    
-    # Reset RNG to unpredictable state after render
-    random.seed()
     
     # Apply antialiasing by resizing down
     if antialiasing:
