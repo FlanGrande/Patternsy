@@ -688,6 +688,13 @@ class PatternGeneratorApp(QMainWindow):
             spacing_x = self.width // max(1, self.columns)
             spacing_y = self.height // max(1, self.rows)
             
+            # diagonal_offset_x and point_jitter are expressed in preview-space pixels.
+            # Scale them up so the result matches the preview proportionally.
+            # full_spacing / preview_spacing = 1 / preview_scale
+            scale_factor = (1.0 / self.preview_scale) if self.preview_scale > 0 else 1.0
+            scaled_diagonal_offset_x = int(self.diagonal_offset_x * scale_factor)
+            scaled_point_jitter = int(self.point_jitter * scale_factor)
+            
             # Show a progress message
             QMessageBox.information(self, "Generating", "Generating pattern. This might take a moment...")
             
@@ -712,9 +719,9 @@ class PatternGeneratorApp(QMainWindow):
                 row_rotations=self.row_rotations,
                 columns=self.columns,
                 rows=self.rows,
-                diagonal_offset_x=self.diagonal_offset_x,
+                diagonal_offset_x=scaled_diagonal_offset_x,
                 random_seed=self.random_seed,
-                point_jitter=self.point_jitter
+                point_jitter=scaled_point_jitter
             )
             
             # Show success message
