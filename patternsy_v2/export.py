@@ -64,9 +64,11 @@ def _paste_shape(
     else:
         img = shape_cls.rasterize(sw, sh, shape.color)
 
-    # Rotate — expand=True so corners aren't clipped; BICUBIC for smooth edges
+    # Rotate — expand=True so corners aren't clipped; BICUBIC for smooth edges.
+    # Negate angle: Pillow rotates CCW, but screen-space Y is flipped so the
+    # viewport effectively rotates CW for positive angles. Negate to match.
     if shape.rotation != 0:
-        img = img.rotate(shape.rotation, resample=Image.BICUBIC, expand=True)
+        img = img.rotate(-shape.rotation, resample=Image.BICUBIC, expand=True)
 
     # Paste at main position + ghosts
     cx = int(shape.position[0] * scale)
