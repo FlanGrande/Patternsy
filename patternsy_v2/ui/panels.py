@@ -107,9 +107,9 @@ def draw_pattern_panel(app: App) -> None:
     if changed:
         app.state.default_shape_size = (max(1.0, size[0]), max(1.0, size[1]))
 
-    changed, v = imgui.input_float("Default Rotation", app.state.default_shape_rotation, 1.0, 10.0)
+    changed, v = imgui.slider_float("Default Rotation", app.state.default_shape_rotation, 0.0, 360.0)
     if changed:
-        app.state.default_shape_rotation = v % 360
+        app.state.default_shape_rotation = v
 
     col = [c / 255 for c in app.state.default_shape_color]
     changed, col = imgui.color_edit4("Shape Color", col)

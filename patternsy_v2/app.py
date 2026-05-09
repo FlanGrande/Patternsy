@@ -108,9 +108,12 @@ class App:
             return None
 
         if extend:
-            self.selected_ids ^= {hit.id}
+            self.selected_ids |= {hit.id}   # add only, never remove
         else:
-            self.selected_ids = {hit.id}
+            # If clicking an already-selected shape without shift, keep the
+            # full selection intact so a drag can move all of them.
+            if hit.id not in self.selected_ids:
+                self.selected_ids = {hit.id}
         return hit
 
     def selected_shapes(self) -> list[ShapeInstance]:

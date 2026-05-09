@@ -29,6 +29,10 @@ class PatternsyGui:
         self.app = App()
         self.canvas = CanvasRenderer()
         self._first_frame = True
+        # Box selection state (screen coords)
+        self._box_selecting: bool = False
+        self._box_start: tuple[float, float] = (0.0, 0.0)
+        self._box_end: tuple[float, float] = (0.0, 0.0)
 
     def run(self) -> None:
         runner_params = hello_imgui.RunnerParams()
@@ -129,8 +133,8 @@ class PatternsyGui:
         if is_canvas_hovered:
             self.canvas.handle_pan_zoom(cursor, avail)
 
-        # Handle mouse interaction for selection/dragging
-        self._handle_mouse(cursor, avail, is_canvas_hovered, is_canvas_active)
+        # Handle mouse interaction for selection/dragging/box-select
+        self._handle_mouse(cursor, avail, draw_list, is_canvas_hovered)
 
         # Handle keyboard shortcuts
         self._handle_keyboard()
@@ -141,32 +145,90 @@ class PatternsyGui:
         self,
         origin: imgui.ImVec2,
         size: imgui.ImVec2,
+        draw_list: imgui.ImDrawList,
         hovered: bool,
-        active: bool,
     ) -> None:
         io = imgui.get_io()
         mouse = io.mouse_pos
-
-        if not hovered:
-            return
-
         ox, oy = origin.x, origin.y
         cx, cy = self.canvas.screen_to_canvas(mouse.x, mouse.y, ox, oy)
+        extend = io.key_shift
 
-        # Left click → select/start drag
-        if imgui.is_mouse_clicked(imgui.MouseButton_.left):
-            extend = io.key_shift
+        # ── Left click ────────────────────────────────────────────────────
+        if imgui.is_mouse_clicked(imgui.MouseButton_.left) and hovered:
             hit = self.app.pick(cx, cy, extend)
             if hit and not hit.locked:
+                # Clicked a shape → start drag
                 self.app.begin_drag(cx, cy)
+                self._box_selecting = False
+            elif hit is None:
+                # Clicked empty space → start box selection
+                self._box_selecting = True
+                self._box_start = (mouse.x, mouse.y)
+                self._box_end = (mouse.x, mouse.y)
 
-        # Left drag → move selected
-        if imgui.is_mouse_dragging(imgui.MouseButton_.left, 2.0) and self.app.is_dragging:
-            self.app.update_drag(cx, cy)
+        # ── Left drag ─────────────────────────────────────────────────────
+        if imgui.is_mouse_dragging(imgui.MouseButton_.left, 4.0):
+            if self.app.is_dragging:
+                self.app.update_drag(cx, cy)
+            elif self._box_selecting:
+                self._box_end = (mouse.x, mouse.y)
 
-        # Left release → end drag
-        if imgui.is_mouse_released(imgui.MouseButton_.left) and self.app.is_dragging:
-            self.app.end_drag()
+        # ── Draw box selection rect ───────────────────────────────────────
+        if self._box_selecting:
+            sx0, sy0 = self._box_start
+            sx1, sy1 = self._box_end
+            # Clip rect to viewport
+            draw_list.push_clip_rect(
+                imgui.ImVec2(ox, oy),
+                imgui.ImVec2(ox + size.x, oy + size.y),
+                True,
+            )
+            fill_col = imgui.get_color_u32(imgui.ImVec4(0.2, 0.6, 1.0, 0.15))
+            border_col = imgui.get_color_u32(imgui.ImVec4(0.3, 0.7, 1.0, 0.9))
+            draw_list.add_rect_filled(
+                imgui.ImVec2(sx0, sy0), imgui.ImVec2(sx1, sy1), fill_col,
+            )
+            draw_list.add_rect(
+                imgui.ImVec2(sx0, sy0), imgui.ImVec2(sx1, sy1), border_col, 0, 0, 1.5,
+            )
+            draw_list.pop_clip_rect()
+
+        # ── Left release ──────────────────────────────────────────────────
+        if imgui.is_mouse_released(imgui.MouseButton_.left):
+            if self.app.is_dragging:
+                self.app.end_drag()
+
+            if self._box_selecting:
+                self._finish_box_select(ox, oy, extend)
+                self._box_selecting = False
+
+    def _finish_box_select(self, ox: float, oy: float, extend: bool) -> None:
+        """Convert box (screen coords) to canvas coords and select all shapes inside."""
+        sx0, sy0 = self._box_start
+        sx1, sy1 = self._box_end
+
+        # Normalise so min/max are correct regardless of drag direction
+        cx0, cy0 = self.canvas.screen_to_canvas(min(sx0, sx1), min(sy0, sy1), ox, oy)
+        cx1, cy1 = self.canvas.screen_to_canvas(max(sx0, sx1), max(sy0, sy1), ox, oy)
+
+        # Skip tiny accidental clicks (< 4 px drag)
+        if abs(sx1 - sx0) < 4 and abs(sy1 - sy0) < 4:
+            return
+
+        hit_ids: set[str] = set()
+        for shape in self.app.state.shapes:
+            spx, spy = shape.position
+            shw, shh = shape.size[0] / 2, shape.size[1] / 2
+            # AABB overlap test
+            if (spx + shw > cx0 and spx - shw < cx1 and
+                    spy + shh > cy0 and spy - shh < cy1):
+                hit_ids.add(shape.id)
+
+        if extend:
+            self.app.selected_ids |= hit_ids
+        else:
+            self.app.selected_ids = hit_ids
 
     def _handle_keyboard(self) -> None:
         io = imgui.get_io()
