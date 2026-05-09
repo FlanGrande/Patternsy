@@ -64,9 +64,9 @@ def _paste_shape(
     else:
         img = shape_cls.rasterize(sw, sh, shape.color)
 
-    # Rotate
+    # Rotate — expand=True so corners aren't clipped; BICUBIC for smooth edges
     if shape.rotation != 0:
-        img = img.rotate(shape.rotation, resample=Image.NEAREST, expand=False)
+        img = img.rotate(shape.rotation, resample=Image.BICUBIC, expand=True)
 
     # Paste at main position + ghosts
     cx = int(shape.position[0] * scale)
