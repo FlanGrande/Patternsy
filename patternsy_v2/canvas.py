@@ -7,10 +7,14 @@ highlight, ghost tiling preview, and mouse interaction dispatch.
 from __future__ import annotations
 
 import math
-from imgui_bundle import imgui
+import os
+
+import numpy as np
+from PIL import Image as PILImage
+from imgui_bundle import imgui, hello_imgui
 
 from patternsy_v2.model import ShapeInstance
-from patternsy_v2.shapes.base import SHAPE_REGISTRY, circle_vertices
+from patternsy_v2.shapes.base import SHAPE_REGISTRY
 from patternsy_v2.tiling import ghost_offsets
 
 # ── Color helpers ───────────────────────────────────────────────────────────
@@ -20,6 +24,29 @@ def _rgba_to_u32(r: int, g: int, b: int, a: int) -> int:
 
 def _rgba_to_u32_alpha(r: int, g: int, b: int, a: int, alpha_mult: float) -> int:
     return imgui.get_color_u32(imgui.ImVec4(r / 255, g / 255, b / 255, (a / 255) * alpha_mult))
+
+# ── GPU texture cache ────────────────────────────────────────────────────────
+# Key: image file path. Value: hello_imgui.TextureGpu (must stay alive).
+_texture_cache: dict[str, hello_imgui.TextureGpu] = {}
+
+def _get_texture(path: str) -> hello_imgui.TextureGpu | None:
+    """Load image from path into a GPU texture (cached by path)."""
+    if not path or not os.path.exists(path):
+        return None
+    if path in _texture_cache:
+        return _texture_cache[path]
+    try:
+        img = PILImage.open(path).convert("RGBA")
+        arr = np.asarray(img, dtype=np.uint8)
+        tex = hello_imgui.create_texture_gpu_from_rgba_data(arr)
+        _texture_cache[path] = tex
+        return tex
+    except Exception as e:
+        print(f"[canvas] texture load failed: {e}")
+        return None
+
+def clear_texture_cache() -> None:
+    _texture_cache.clear()
 
 
 class CanvasRenderer:
@@ -113,6 +140,30 @@ class CanvasRenderer:
         if shape_cls is None:
             return
 
+        # ── Custom image: render as textured quad ───────────────────────
+        if shape.shape_type == "custom" and shape.custom_image_path:
+            tex = _get_texture(shape.custom_image_path)
+            if tex is not None:
+                # 4 corners of the quad in local space (normalized -0.5..+0.5)
+                corners_local = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)]
+                pts = [
+                    self._transform_vertex(v, cx, cy, sw, sh, cos_r, sin_r, ox, oy)
+                    for v in corners_local
+                ]
+                tint = _rgba_to_u32_alpha(255, 255, 255, 255, alpha)
+                tex_ref = imgui.ImTextureRef(tex.texture_id())
+                draw_list.add_image_quad(
+                    tex_ref,
+                    imgui.ImVec2(pts[0][0], pts[0][1]),  # top-left
+                    imgui.ImVec2(pts[1][0], pts[1][1]),  # top-right
+                    imgui.ImVec2(pts[2][0], pts[2][1]),  # bottom-right
+                    imgui.ImVec2(pts[3][0], pts[3][1]),  # bottom-left
+                    col=tint,
+                )
+                return
+            # Fallback if texture failed: magenta square
+            color = _rgba_to_u32_alpha(255, 0, 255, 255, alpha)
+
         verts = shape_cls.vertices(sw, sh)
 
         if shape.shape_type == "circle":
@@ -122,7 +173,7 @@ class CanvasRenderer:
             draw_list.add_circle_filled(
                 imgui.ImVec2(scx, scy), radius, color, 64,
             )
-        elif shape.shape_type in ("star",):
+        elif shape.shape_type == "star":
             # TRIANGLE_FAN: first vertex is center
             center = verts[0]
             fan_verts = verts[1:]
@@ -148,7 +199,7 @@ class CanvasRenderer:
                 color,
             )
         else:
-            # Generic: 6-vertex quad (two triangles) — square, custom
+            # Generic quad (two triangles) — square, custom fallback
             for i in range(0, len(verts) - 2, 3):
                 pts = [self._transform_vertex(verts[i + j], cx, cy, sw, sh, cos_r, sin_r, ox, oy) for j in range(3)]
                 draw_list.add_triangle_filled(
