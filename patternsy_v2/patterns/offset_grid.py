@@ -20,6 +20,7 @@ class OffsetGridPattern(PatternGenerator):
         n_cols = math.ceil(w / sx) + 1
 
         shapes: list[ShapeInstance] = []
+        idx = 0
         for r in range(rows):
             if r % 2 == 1:
                 offset = sx / 2
@@ -28,10 +29,12 @@ class OffsetGridPattern(PatternGenerator):
                     x = start + i * sx
                     if 0 <= x < w:
                         y = sy / 2 + r * sy
-                        shapes.append(OffsetGridPattern._make_shape(state, x, y))
+                        shapes.append(OffsetGridPattern._make_shape(state, x, y, idx))
+                        idx += 1
             else:
                 for c in range(cols):
                     x = sx / 2 + c * sx
                     y = sy / 2 + r * sy
-                    shapes.append(OffsetGridPattern._make_shape(state, x, y))
+                    shapes.append(OffsetGridPattern._make_shape(state, x, y, idx))
+                    idx += 1
         return shapes

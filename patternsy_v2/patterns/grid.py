@@ -21,5 +21,6 @@ class GridPattern(PatternGenerator):
             for c in range(cols):
                 x = sx / 2 + c * sx
                 y = sy / 2 + r * sy
-                shapes.append(GridPattern._make_shape(state, x, y))
+                index = r * cols + c
+                shapes.append(GridPattern._make_shape(state, x, y, index))
         return shapes

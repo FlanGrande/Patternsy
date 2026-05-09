@@ -48,7 +48,7 @@ def draw_toolbar(app: App) -> None:
             app.delete_selected()
         imgui.end_menu()
 
-    # Process dialogs
+    # Process pending file dialogs
     _process_dialogs(app)
 
 
@@ -83,6 +83,7 @@ def draw_pattern_panel(app: App) -> None:
         changed, v = imgui.input_int("Seed", int(p.get("seed", 0)))
         if changed:
             p["seed"] = v
+        imgui.same_line()
         if imgui.button("New Seed"):
             import random
             p["seed"] = random.randint(0, 2**31 - 1)
@@ -110,7 +111,6 @@ def draw_pattern_panel(app: App) -> None:
     if changed:
         app.state.default_shape_rotation = v % 360
 
-    # Default color
     col = [c / 255 for c in app.state.default_shape_color]
     changed, col = imgui.color_edit4("Shape Color", col)
     if changed:
@@ -121,6 +121,20 @@ def draw_pattern_panel(app: App) -> None:
         imgui.text(f"Image: {os.path.basename(path_text)}")
         if imgui.button("Browse Custom Image..."):
             _start_custom_img_dialog(app)
+
+    imgui.separator()
+
+    # Reset all points to pattern defaults
+    n_edited = sum(1 for s in app.state.shapes if s.has_any_delta())
+    label = f"Reset All Points ({n_edited} edited)" if n_edited else "Reset All Points"
+    if imgui.button(label, imgui.ImVec2(-1, 0)):
+        app.reset_all_deltas()
+
+    imgui.spacing()
+
+    # Quick export button — defaults to cwd
+    if imgui.button("Export Image...", imgui.ImVec2(-1, 0)):
+        _start_export_dialog(app)
 
     imgui.end()
 
@@ -144,58 +158,101 @@ def draw_canvas_panel(app: App) -> None:
         app.state.show_tiling_ghosts = v
 
     imgui.separator()
-    imgui.text(f"Shapes: {len(app.state.shapes)}")
+    imgui.text(f"Points: {len(app.state.shapes)}")
     imgui.text(f"Selected: {len(app.selected_ids)}")
+    edited = sum(1 for s in app.state.shapes if s.has_any_delta())
+    if edited:
+        imgui.text(f"Edited: {edited}")
 
     imgui.end()
 
 
 def draw_properties_panel(app: App) -> None:
-    """Selected shape properties."""
+    """Selected point properties."""
     imgui.begin("Properties")
 
     sel = app.selected_shapes()
     if not sel:
-        imgui.text_disabled("No shape selected")
+        imgui.text_disabled("No point selected")
         imgui.end()
         return
 
     if len(sel) == 1:
         s = sel[0]
-        imgui.text(f"ID: {s.id}")
+        imgui.text(f"Index: {s.index}")
         imgui.text(f"Type: {s.shape_type}")
 
-        pos = list(s.position)
-        changed, pos = imgui.input_float2("Position", pos)
+        # ── Position ──────────────────────────────────────────────────
+        eff_pos = list(s.position)
+        changed, eff_pos = imgui.input_float2("Position", eff_pos)
         if changed:
             app.history.push(app.state.shapes)
-            s.position = tuple(pos)
+            s.set_effective_position(eff_pos[0], eff_pos[1])
 
-        size = list(s.size)
-        changed, size = imgui.input_float2("Size", size)
+        dp = s.delta_position
+        if dp != (0.0, 0.0):
+            imgui.same_line()
+            imgui.text_disabled(f"  Δ ({dp[0]:+.1f}, {dp[1]:+.1f})")
+
+        # ── Size ──────────────────────────────────────────────────────
+        eff_size = list(s.size)
+        changed, eff_size = imgui.input_float2("Size", eff_size)
         if changed:
             app.history.push(app.state.shapes)
-            s.size = (max(1.0, size[0]), max(1.0, size[1]))
+            s.set_effective_size(max(1.0, eff_size[0]), max(1.0, eff_size[1]))
 
-        changed, rot = imgui.slider_float("Rotation", s.rotation, 0.0, 360.0)
+        ds = s.delta_size
+        if ds != (0.0, 0.0):
+            imgui.same_line()
+            imgui.text_disabled(f"  Δ ({ds[0]:+.1f}, {ds[1]:+.1f})")
+
+        # ── Rotation ──────────────────────────────────────────────────
+        changed, rot = imgui.slider_float("Rotation", s.rotation % 360, 0.0, 360.0)
         if changed:
             app.history.push(app.state.shapes)
-            s.rotation = rot
+            s.set_effective_rotation(rot)
 
+        if s.delta_rotation != 0.0:
+            imgui.same_line()
+            imgui.text_disabled(f"  Δ {s.delta_rotation:+.1f}°")
+
+        # ── Color ─────────────────────────────────────────────────────
         col = [c / 255 for c in s.color]
         changed, col = imgui.color_edit4("Color", col)
         if changed:
             app.history.push(app.state.shapes)
-            s.color = tuple(int(c * 255) for c in col)  # type: ignore
+            s.set_effective_color(tuple(int(c * 255) for c in col))  # type: ignore
 
-        changed, locked = imgui.checkbox("Locked", s.locked)
+        if s.override_color is not None:
+            imgui.same_line()
+            imgui.text_disabled("  (overridden)")
+
+        imgui.separator()
+
+        # ── Locked ────────────────────────────────────────────────────
+        changed, locked = imgui.checkbox("Locked (prevent drag)", s.locked)
         if changed:
             s.locked = locked
-    else:
-        imgui.text(f"{len(sel)} shapes selected")
 
-        # Bulk rotation
-        changed, rot = imgui.slider_float("Rotation (all)", sel[0].rotation, 0.0, 360.0)
+        # ── Delta indicator + reset ───────────────────────────────────
+        if s.has_any_delta():
+            imgui.spacing()
+            imgui.text_colored(imgui.ImVec4(1.0, 0.8, 0.2, 1.0), "* Point has manual edits")
+            if imgui.button("Reset This Point"):
+                app.history.push(app.state.shapes)
+                s.reset_deltas()
+
+    else:
+        # ── Multi-select ──────────────────────────────────────────────
+        imgui.text(f"{len(sel)} points selected")
+        n_edited = sum(1 for s in sel if s.has_any_delta())
+        if n_edited:
+            imgui.text_colored(imgui.ImVec4(1.0, 0.8, 0.2, 1.0), f"* {n_edited} have manual edits")
+
+        imgui.separator()
+
+        # Bulk rotation (shows first selected shape's effective rotation as starting value)
+        changed, rot = imgui.slider_float("Rotation (all)", sel[0].rotation % 360, 0.0, 360.0)
         if changed:
             app.history.push(app.state.shapes)
             app.set_selected_rotation(rot)
@@ -208,33 +265,47 @@ def draw_properties_panel(app: App) -> None:
             app.set_selected_color(tuple(int(c * 255) for c in col))  # type: ignore
 
         # Bulk size
-        size = list(sel[0].size)
-        changed, size = imgui.input_float2("Size (all)", size)
+        eff_size = list(sel[0].size)
+        changed, eff_size = imgui.input_float2("Size (all)", eff_size)
         if changed:
             app.history.push(app.state.shapes)
-            app.set_selected_size((max(1.0, size[0]), max(1.0, size[1])))
+            app.set_selected_size((max(1.0, eff_size[0]), max(1.0, eff_size[1])))
+
+        imgui.separator()
+
+        # Bulk locked toggle
+        all_locked = all(s.locked for s in sel)
+        changed, locked = imgui.checkbox("Locked (all)", all_locked)
+        if changed:
+            for s in sel:
+                s.locked = locked
+
+        imgui.spacing()
+        if imgui.button(f"Reset {len(sel)} Points", imgui.ImVec2(-1, 0)):
+            app.reset_selected_deltas()
 
     imgui.end()
 
 
-# ── File dialogs (non-blocking via portable_file_dialogs) ───────────────────
+# ── File dialogs ──────────────────────────────────────────────────────────────
 
 def _start_save_dialog(app: App) -> None:
     global _save_dialog
-    _save_dialog = pfd.save_file("Save Project", "", ["JSON files", "*.json"])
+    _save_dialog = pfd.save_file("Save Project", os.getcwd(), ["JSON files", "*.json"])
 
 def _start_load_dialog(app: App) -> None:
     global _load_dialog
-    _load_dialog = pfd.open_file("Load Project", "", ["JSON files", "*.json"])
+    _load_dialog = pfd.open_file("Load Project", os.getcwd(), ["JSON files", "*.json"])
 
 def _start_export_dialog(app: App) -> None:
     global _export_dialog
-    _export_dialog = pfd.save_file("Export Image", "pattern.png", ["PNG files", "*.png"])
+    default_path = os.path.join(os.getcwd(), "pattern.png")
+    _export_dialog = pfd.save_file("Export Image", default_path, ["PNG files", "*.png"])
 
 def _start_custom_img_dialog(app: App) -> None:
     global _custom_img_dialog
     _custom_img_dialog = pfd.open_file(
-        "Select Custom Image", "",
+        "Select Custom Image", os.getcwd(),
         ["Image files", "*.png *.jpg *.jpeg *.gif *.bmp *.webp"],
     )
 
@@ -245,10 +316,9 @@ def _process_dialogs(app: App) -> None:
     if _save_dialog is not None and _save_dialog.ready():
         path = _save_dialog.result()
         if path:
-            p = path if isinstance(path, str) else path
-            if not p.lower().endswith(".json"):
-                p += ".json"
-            save_project(app.state, p)
+            if not path.lower().endswith(".json"):
+                path += ".json"
+            save_project(app.state, path)
         _save_dialog = None
 
     if _load_dialog is not None and _load_dialog.ready():
@@ -263,10 +333,9 @@ def _process_dialogs(app: App) -> None:
     if _export_dialog is not None and _export_dialog.ready():
         path = _export_dialog.result()
         if path:
-            p = path if isinstance(path, str) else path
-            if not p.lower().endswith(".png"):
-                p += ".png"
-            export_pattern(app.state, p)
+            if not path.lower().endswith(".png"):
+                path += ".png"
+            export_pattern(app.state, path)
         _export_dialog = None
 
     if _custom_img_dialog is not None and _custom_img_dialog.ready():

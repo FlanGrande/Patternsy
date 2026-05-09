@@ -1,8 +1,4 @@
-"""Pattern generator plugin system.
-
-Each pattern type registers via @register_pattern.
-Generators produce a list of ShapeInstance from PatternState.
-"""
+"""Pattern generator plugin system."""
 
 from __future__ import annotations
 
@@ -16,7 +12,6 @@ PATTERN_REGISTRY: dict[str, type["PatternGenerator"]] = {}
 
 
 def register_pattern(name: str):
-    """Decorator to register a pattern generator under *name*."""
     def decorator(cls: type[PatternGenerator]) -> type[PatternGenerator]:
         PATTERN_REGISTRY[name] = cls
         return cls
@@ -24,12 +19,10 @@ def register_pattern(name: str):
 
 
 class PatternGenerator(ABC):
-    """Base class for pattern coordinate generators."""
 
     @staticmethod
     @abstractmethod
     def generate(state: "PatternState") -> list["ShapeInstance"]:
-        """Generate shapes from the current state."""
         ...
 
     @staticmethod
@@ -37,14 +30,16 @@ class PatternGenerator(ABC):
         state: "PatternState",
         x: float,
         y: float,
+        index: int,
     ) -> "ShapeInstance":
-        """Helper: create a ShapeInstance at (x, y) using state defaults."""
+        """Create a ShapeInstance at (x, y) with stable index and state defaults as base values."""
         from patternsy_v2.model import ShapeInstance
         return ShapeInstance(
-            position=(x, y),
-            size=state.default_shape_size,
-            rotation=state.default_shape_rotation,
+            index=index,
+            base_position=(x, y),
+            base_size=state.default_shape_size,
+            base_rotation=state.default_shape_rotation,
+            base_color=state.default_shape_color,
             shape_type=state.default_shape_type,
-            color=state.default_shape_color,
             custom_image_path=state.default_custom_image_path or None,
         )

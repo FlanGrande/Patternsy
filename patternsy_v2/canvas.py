@@ -108,7 +108,7 @@ class CanvasRenderer:
             if show_ghosts:
                 for dx, dy in ghost_offsets(shape, canvas_w, canvas_h):
                     ghost = shape.clone()
-                    ghost.position = (shape.position[0] + dx, shape.position[1] + dy)
+                    ghost.base_position = (shape.base_position[0] + dx, shape.base_position[1] + dy)
                     self._draw_shape(draw_list, ox, oy, ghost, False, 0.3)
 
         # Selection highlight: draw bounding boxes for selected shapes

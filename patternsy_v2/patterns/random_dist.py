@@ -26,6 +26,7 @@ class RandomPattern(PatternGenerator):
 
         placed: list[tuple[float, float]] = []
         shapes: list[ShapeInstance] = []
+        idx = 0
 
         for _ in range(num_shapes):
             for _attempt in range(20):
@@ -38,7 +39,8 @@ class RandomPattern(PatternGenerator):
                         break
                 if not too_close:
                     placed.append((x, y))
-                    shapes.append(RandomPattern._make_shape(state, x, y))
+                    shapes.append(RandomPattern._make_shape(state, x, y, idx))
+                    idx += 1
                     break
 
         return shapes

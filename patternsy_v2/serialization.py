@@ -9,7 +9,6 @@ from patternsy_v2.model import PatternState, ShapeInstance
 
 
 def save_project(state: PatternState, path: str | Path) -> None:
-    """Serialize full state to JSON."""
     data = {
         "version": state.version,
         "canvas_size": list(state.canvas_size),
@@ -29,7 +28,6 @@ def save_project(state: PatternState, path: str | Path) -> None:
 
 
 def load_project(path: str | Path) -> PatternState:
-    """Deserialize PatternState from JSON."""
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -49,7 +47,6 @@ def load_project(path: str | Path) -> PatternState:
     state.default_shape_rotation = float(data.get("default_shape_rotation", 0))
     state.default_custom_image_path = data.get("default_custom_image_path", "")
     state.show_tiling_ghosts = data.get("show_tiling_ghosts", True)
-
     state.shapes = [_dict_to_shape(d) for d in data.get("shapes", [])]
     return state
 
@@ -57,24 +54,35 @@ def load_project(path: str | Path) -> PatternState:
 def _shape_to_dict(s: ShapeInstance) -> dict:
     return {
         "id": s.id,
-        "position": list(s.position),
-        "size": list(s.size),
-        "rotation": s.rotation,
+        "index": s.index,
+        "base_position": list(s.base_position),
+        "base_size": list(s.base_size),
+        "base_rotation": s.base_rotation,
+        "base_color": list(s.base_color),
         "shape_type": s.shape_type,
-        "color": list(s.color),
         "custom_image_path": s.custom_image_path or "",
+        "delta_position": list(s.delta_position),
+        "delta_size": list(s.delta_size),
+        "delta_rotation": s.delta_rotation,
+        "override_color": list(s.override_color) if s.override_color is not None else None,
         "locked": s.locked,
     }
 
 
 def _dict_to_shape(d: dict) -> ShapeInstance:
+    oc = d.get("override_color")
     return ShapeInstance(
         id=d.get("id", ""),
-        position=tuple(d.get("position", [0, 0])),
-        size=tuple(d.get("size", [32, 32])),
-        rotation=float(d.get("rotation", 0)),
+        index=int(d.get("index", 0)),
+        base_position=tuple(d.get("base_position", [0, 0])),  # type: ignore
+        base_size=tuple(d.get("base_size", [32, 32])),        # type: ignore
+        base_rotation=float(d.get("base_rotation", 0)),
+        base_color=tuple(d.get("base_color", [255, 136, 0, 255])),  # type: ignore
         shape_type=d.get("shape_type", "circle"),
-        color=tuple(d.get("color", [255, 136, 0, 255])),
         custom_image_path=d.get("custom_image_path") or None,
+        delta_position=tuple(d.get("delta_position", [0, 0])),  # type: ignore
+        delta_size=tuple(d.get("delta_size", [0, 0])),          # type: ignore
+        delta_rotation=float(d.get("delta_rotation", 0)),
+        override_color=tuple(oc) if oc is not None else None,  # type: ignore
         locked=bool(d.get("locked", False)),
     )
