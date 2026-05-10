@@ -128,6 +128,73 @@ def draw_pattern_panel(app: App) -> None:
     _commit_pre_edit(app)
 
     imgui.separator()
+    imgui.text("Randomization:")
+
+    # ── Random Rotation ──────────────────────────────────────────────────
+    rot_r = float(p.get("rotation_random", 0.0))
+    imgui.set_next_item_width(imgui.get_content_region_avail().x - 70)
+    changed, rot_r = imgui.slider_float("##rotrnd_slider", rot_r, 0.0, 360.0)
+    _capture_pre_edit(app)
+    if changed:
+        p["rotation_random"] = rot_r
+    _commit_pre_edit(app)
+    imgui.same_line()
+    imgui.set_next_item_width(60)
+    changed, rot_r = imgui.input_float("##rotrnd_input", float(p.get("rotation_random", 0.0)), 0.0, 0.0, "%.1f")
+    _capture_pre_edit(app)
+    if changed:
+        p["rotation_random"] = max(0.0, rot_r)
+    _commit_pre_edit(app)
+    imgui.same_line()
+    imgui.text("Rot. Random")
+
+    changed, v = imgui.input_int("##rotseed", int(p.get("rotation_seed", 0)))
+    _capture_pre_edit(app)
+    if changed:
+        p["rotation_seed"] = v
+    _commit_pre_edit(app)
+    imgui.same_line()
+    if imgui.button("New##rotseed"):
+        import random as _random
+        app._push()
+        p["rotation_seed"] = _random.randint(0, 2**31 - 1)
+    imgui.same_line()
+    imgui.text("Rot. Seed")
+
+    imgui.spacing()
+
+    # ── Random Scale ──────────────────────────────────────────────────────
+    sc_r = float(p.get("scale_random", 0.0))
+    imgui.set_next_item_width(imgui.get_content_region_avail().x - 70)
+    changed, sc_r = imgui.slider_float("##scalernd_slider", sc_r, 0.0, 1.0)
+    _capture_pre_edit(app)
+    if changed:
+        p["scale_random"] = sc_r
+    _commit_pre_edit(app)
+    imgui.same_line()
+    imgui.set_next_item_width(60)
+    changed, sc_r = imgui.input_float("##scalernd_input", float(p.get("scale_random", 0.0)), 0.0, 0.0, "%.2f")
+    _capture_pre_edit(app)
+    if changed:
+        p["scale_random"] = max(0.0, min(1.0, sc_r))
+    _commit_pre_edit(app)
+    imgui.same_line()
+    imgui.text("Scale Random")
+
+    changed, v = imgui.input_int("##scaleseed", int(p.get("scale_seed", 0)))
+    _capture_pre_edit(app)
+    if changed:
+        p["scale_seed"] = v
+    _commit_pre_edit(app)
+    imgui.same_line()
+    if imgui.button("New##scaleseed"):
+        import random as _random
+        app._push()
+        p["scale_seed"] = _random.randint(0, 2**31 - 1)
+    imgui.same_line()
+    imgui.text("Scale Seed")
+
+    imgui.separator()
 
     # Default shape settings
     imgui.text("Default Shape:")

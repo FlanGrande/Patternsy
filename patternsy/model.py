@@ -130,6 +130,10 @@ class PatternState:
         "diagonal_offset_x": 0,
         "seed": 0,
         "jitter": 0,
+        "rotation_random": 0.0,
+        "rotation_seed": 0,
+        "scale_random": 0.0,
+        "scale_seed": 0,
     })
 
     # Default shape settings (used by pattern generator)
