@@ -1,126 +1,89 @@
 # Patternsy
 
-Patternsy is a pattern generation tool that allows you to create various visual patterns with customizable shapes, arrangements, and colors.
+Interactive seamless pattern generator. Place shapes on a canvas, adjust them individually or in bulk, and export tileable PNG images.
+
+Built with Dear ImGui (`imgui-bundle`) and Pillow.
 
 ## Features
 
-- Create patterns with different shapes: circles, squares, triangles, stars, or custom images
-- Arrange shapes in different patterns: grid, offset grid, diagonal grid, random, or spiral
-- Adjust size, spacing, rotation, and randomness parameters
-- Choose custom colors for background and foreground
-- Live preview of your pattern as you adjust settings
-- Export patterns as PNG images
-
-## Usage
-
-### Command Line Interface
-
-You can use Patternsy directly from the command line:
-
-```python
-python patternsy.py
-```
-
-This will generate a pattern with the default settings.
-
-### Graphical User Interface
-
-For more interactive pattern creation, use the GUI:
-
-```python
-python patternsy_ui.py
-```
-
-The GUI provides:
-
-1. **Settings Panel** (left side):
-   - Dimensions: Set the width and height of the output image
-   - Shape Settings: Choose shape type, base scale, and spacing
-   - Pattern Settings: Select the arrangement pattern (grid, offset grid, diagonal grid, random, spiral)
-   - Diagonal Grid: For diagonal_grid pattern, adjust the horizontal offset per row
-   - Randomization: Control scale and rotation randomness
-   - Colors: Set background and foreground colors
-   - Output: Specify the output filename
-
-2. **Preview Panel** (right side):
-   - Real-time preview of your pattern
-   - Preview updates as you adjust settings
-
-3. **Generate Button**:
-   - Creates the full-resolution pattern and saves it to disk
-
-## Examples
-
-The repository includes some example patterns:
-- `my_polka_pattern.png`: Basic polka dot pattern
-- `random_triangles.png`: Randomly distributed triangles
-- `spiral_stars.png`: Stars arranged in a spiral pattern
-
-## Pattern Types Explained
-
-- **Grid**: Regular grid arrangement with evenly spaced shapes
-- **Offset Grid**: Every other row is offset by half the spacing, creating a brick-like pattern
-- **Diagonal Grid**: Grid pattern where each row is offset horizontally by a configurable amount, creating diagonal lines. Use the "Diagonal Offset X" control to adjust the offset per row (can be negative to offset in the opposite direction)
-- **Random**: Randomly distributed shapes with minimum spacing constraints
-- **Spiral**: Shapes arranged in a spiral pattern from center outward
+- **5 pattern types:** grid, offset grid, diagonal grid, random, spiral
+- **5 shape types:** circle, square, triangle, star, custom image
+- **Interactive canvas:** click to select, drag to move, box-select multiple shapes
+- **Per-point editing:** each shape has its own position, size, rotation, and color — editable individually or in bulk
+- **Delta model:** manual edits survive pattern regeneration (base position updates, your overrides are preserved)
+- **Locked points:** lock individual shapes to prevent accidental dragging
+- **Tiling preview:** ghost copies at canvas edges show seamless tile behaviour in real time
+- **Undo/redo:** full history stack (Ctrl+Z / Ctrl+Y)
+- **Export:** full-resolution PNG with 4× supersampled antialiasing
+- **Save/load:** project state as JSON (File menu or Ctrl+S / Ctrl+O)
 
 ## Requirements
 
-- Python 3.x
-- PIL (Python Imaging Library) / Pillow
-- Tkinter (for the GUI)
+- Python 3.11+
+- `imgui-bundle`
+- `Pillow`
+- `numpy`
+
+```bash
+pip install imgui-bundle Pillow numpy
+```
+
+## Running
+
+```bash
+python3 -m patternsy.main
+```
+
+## Controls
+
+| Action | Input |
+|---|---|
+| Select shape | Left click |
+| Add to selection | Shift + left click |
+| Box select | Left drag on empty space |
+| Move selected | Left drag on shape |
+| Pan canvas | Middle mouse drag |
+| Zoom | Scroll wheel |
+| Fit view | F |
+| Select all | Ctrl+A |
+| Deselect | Escape |
+| Delete selected | Delete |
+| Undo | Ctrl+Z |
+| Redo | Ctrl+Y |
+| Save project | Ctrl+S |
+| Load project | Ctrl+O |
+| Export image | Ctrl+E |
+
+## Pattern Types
+
+| Type | Description |
+|---|---|
+| **grid** | Regular uniform grid |
+| **offset_grid** | Brick/honeycomb — odd rows shift by half spacing |
+| **diagonal_grid** | Each row shifts by a configurable pixel offset, creating diagonal lines |
+| **random** | Poisson-disk-style rejection sampling with minimum spacing |
+| **spiral** | Archimedean spiral from center outward |
 
 ## Creating Executables
 
-You can create standalone executables for Patternsy using Docker and PyInstaller. This approach allows you to create Windows executables from any platform and ensures consistent builds.
-
-### Prerequisites
-
-- Docker installed on your system
-- Basic familiarity with Docker commands
-
-### Creating Windows Executables
-
-To create a Windows executable from any platform (Linux, macOS, or Windows), use the provided Dockerfile:
+### Windows (via Docker + Wine)
 
 ```bash
 # Build the Docker image
 docker build -f Dockerfile.windows -t patternsy-windows-builder .
 
-# Run the container to create the executable
+# Run to produce dist/patternsy.exe
 docker run --rm -v $(pwd)/dist:/app/dist patternsy-windows-builder
 ```
 
-### What the Docker Build Does
-
-The `Dockerfile.windows` uses a Wine-based Python environment to:
-1. Install required Python packages (PyQt6, PyInstaller, Pillow)
-2. Copy your application files
-3. Use the PyInstaller spec file to build a Windows executable
-4. Output the executable to the `dist/` directory
-
-### Output Location
-
-After running the Docker command, you'll find the Windows executable in:
-- `dist/patternsy_ui.exe` - The GUI application executable
-
-### Alternative: Native PyInstaller
-
-If you're already on the target platform, you can use PyInstaller directly:
+### Native (any platform)
 
 ```bash
-# Install PyInstaller
 pip install pyinstaller
-
-# Create executable
-pyinstaller --onefile --windowed patternsy_ui.py
+pyinstaller --onefile --windowed --name patternsy patternsy/main.py
 ```
 
-### Cross-Platform Notes
-
-- The Docker approach is recommended for creating Windows executables from non-Windows systems
-- Docker ensures consistent builds regardless of your host operating system
-- The resulting executable includes all necessary dependencies and can run on Windows without Python installed
+The executable will be in `dist/patternsy` (Linux/macOS) or `dist/patternsy.exe` (Windows).
 
 ## License
 
