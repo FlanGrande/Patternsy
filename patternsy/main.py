@@ -225,10 +225,10 @@ class PatternsyGui:
                     spy + shh > cy0 and spy - shh < cy1):
                 hit_ids.add(shape.id)
 
-        if extend:
-            self.app.selected_ids |= hit_ids
-        else:
-            self.app.selected_ids = hit_ids
+        new_sel = (self.app.selected_ids | hit_ids) if extend else hit_ids
+        if frozenset(new_sel) != frozenset(self.app.selected_ids):
+            self.app._push_selection()   # record pre-change state
+            self.app.selected_ids = new_sel
 
     def _handle_keyboard(self) -> None:
         io = imgui.get_io()

@@ -6,6 +6,7 @@ import os
 from imgui_bundle import imgui, portable_file_dialogs as pfd
 
 from patternsy.app import App
+from patternsy.history import Snapshot
 from patternsy.shapes.base import SHAPE_REGISTRY
 from patternsy.patterns.base import PATTERN_REGISTRY
 from patternsy.serialization import save_project, load_project
@@ -16,6 +17,29 @@ _save_dialog = None
 _load_dialog = None
 _export_dialog = None
 _custom_img_dialog = None
+
+# Single pre-edit snapshot slot — captures state on widget activation (mouse-down),
+# committed to history only on deactivation (mouse-up / focus-lost).
+# Only one ImGui widget can be active at a time, so one slot is sufficient.
+_pre_edit: Snapshot | None = None
+
+
+def _capture_pre_edit(app: App) -> None:
+    """Call after drawing a widget: if it just became active, snapshot current state."""
+    global _pre_edit
+    if imgui.is_item_activated():
+        _pre_edit = Snapshot(
+            shapes=[s.clone() for s in app.state.shapes],
+            selected_ids=frozenset(app.selected_ids),
+        )
+
+
+def _commit_pre_edit(app: App) -> None:
+    """Call after drawing a widget: if it was just released, push pre-edit snapshot."""
+    global _pre_edit
+    if imgui.is_item_deactivated_after_edit() and _pre_edit is not None:
+        app.history.push_snapshot(_pre_edit)
+        _pre_edit = None
 
 
 def draw_toolbar(app: App) -> None:
@@ -193,9 +217,10 @@ def draw_properties_panel(app: App) -> None:
         # ── Position ──────────────────────────────────────────────────
         eff_pos = list(s.position)
         changed, eff_pos = imgui.input_float2("Position", eff_pos)
+        _capture_pre_edit(app)
         if changed:
-            app.history.push(app.state.shapes)
             s.set_effective_position(eff_pos[0], eff_pos[1])
+        _commit_pre_edit(app)
 
         dp = s.delta_position
         if dp != (0.0, 0.0):
@@ -205,9 +230,10 @@ def draw_properties_panel(app: App) -> None:
         # ── Size ──────────────────────────────────────────────────────
         eff_size = list(s.size)
         changed, eff_size = imgui.input_float2("Size", eff_size)
+        _capture_pre_edit(app)
         if changed:
-            app.history.push(app.state.shapes)
             s.set_effective_size(max(1.0, eff_size[0]), max(1.0, eff_size[1]))
+        _commit_pre_edit(app)
 
         ds = s.delta_size
         if ds != (0.0, 0.0):
@@ -218,16 +244,18 @@ def draw_properties_panel(app: App) -> None:
         rot_val = s.rotation % 360
         imgui.set_next_item_width(imgui.get_content_region_avail().x - 70)
         changed, rot = imgui.slider_float("##rot_slider", rot_val, 0.0, 360.0)
+        _capture_pre_edit(app)
         if changed:
-            app.history.push(app.state.shapes)
             s.set_effective_rotation(rot)
             rot_val = rot
+        _commit_pre_edit(app)
         imgui.same_line()
         imgui.set_next_item_width(60)
         changed, rot = imgui.input_float("##rot_input", rot_val, 0.0, 0.0, "%.1f")
+        _capture_pre_edit(app)
         if changed:
-            app.history.push(app.state.shapes)
             s.set_effective_rotation(rot % 360)
+        _commit_pre_edit(app)
         imgui.same_line()
         imgui.text("Rotation")
 
@@ -237,9 +265,10 @@ def draw_properties_panel(app: App) -> None:
         # ── Color ─────────────────────────────────────────────────────
         col = [c / 255 for c in s.color]
         changed, col = imgui.color_edit4("Color", col)
+        _capture_pre_edit(app)
         if changed:
-            app.history.push(app.state.shapes)
             s.set_effective_color(tuple(int(c * 255) for c in col))  # type: ignore
+        _commit_pre_edit(app)
 
         if s.override_color is not None:
             imgui.same_line()
@@ -257,7 +286,7 @@ def draw_properties_panel(app: App) -> None:
             imgui.spacing()
             imgui.text_colored(imgui.ImVec4(1.0, 0.8, 0.2, 1.0), "* Point has manual edits")
             if imgui.button("Reset This Point"):
-                app.history.push(app.state.shapes)
+                app.history.push(app.state.shapes, app.selected_ids)
                 s.reset_deltas()
 
     else:
@@ -273,32 +302,36 @@ def draw_properties_panel(app: App) -> None:
         rot_val = sel[0].rotation % 360
         imgui.set_next_item_width(imgui.get_content_region_avail().x - 70)
         changed, rot = imgui.slider_float("##bulkrot_slider", rot_val, 0.0, 360.0)
+        _capture_pre_edit(app)
         if changed:
-            app.history.push(app.state.shapes)
             app.set_selected_rotation(rot)
             rot_val = rot
+        _commit_pre_edit(app)
         imgui.same_line()
         imgui.set_next_item_width(60)
         changed, rot = imgui.input_float("##bulkrot_input", rot_val, 0.0, 0.0, "%.1f")
+        _capture_pre_edit(app)
         if changed:
-            app.history.push(app.state.shapes)
             app.set_selected_rotation(rot % 360)
+        _commit_pre_edit(app)
         imgui.same_line()
         imgui.text("Rotation (all)")
 
         # Bulk color
         col = [c / 255 for c in sel[0].color]
         changed, col = imgui.color_edit4("Color (all)", col)
+        _capture_pre_edit(app)
         if changed:
-            app.history.push(app.state.shapes)
             app.set_selected_color(tuple(int(c * 255) for c in col))  # type: ignore
+        _commit_pre_edit(app)
 
         # Bulk size
         eff_size = list(sel[0].size)
         changed, eff_size = imgui.input_float2("Size (all)", eff_size)
+        _capture_pre_edit(app)
         if changed:
-            app.history.push(app.state.shapes)
             app.set_selected_size((max(1.0, eff_size[0]), max(1.0, eff_size[1])))
+        _commit_pre_edit(app)
 
         imgui.separator()
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from patternsy.model import PatternState, ShapeInstance
-from patternsy.history import History
+from patternsy.history import History, Snapshot
 from patternsy.patterns.base import PATTERN_REGISTRY
 
 
@@ -14,8 +14,19 @@ class App:
         self.selected_ids: set[str] = set()
         self._dragging: bool = False
         self._drag_start: tuple[float, float] = (0, 0)
-        self._drag_origins: dict[str, tuple[float, float]] = {}  # id → base effective pos at drag start
+        self._drag_origins: dict[str, tuple[float, float]] = {}
+        self._pending_drag_snapshot: Snapshot | None = None
         self._last_pattern_key: object = None
+
+    # ── Internal snapshot helper ─────────────────────────────────────────
+
+    def _push(self) -> None:
+        """Push the current shapes + selection to history before a mutation."""
+        self.history.push(self.state.shapes, self.selected_ids)
+
+    def _push_selection(self) -> None:
+        """Push current state to record a selection-only change."""
+        self.history.push(self.state.shapes, self.selected_ids)
 
     # ── Pattern generation ──────────────────────────────────────────────
 
@@ -42,19 +53,17 @@ class App:
             self._generate_silent()
 
     def _generate_silent(self) -> None:
-        """Regenerate, preserving per-point deltas across the regen via index matching."""
+        """Regenerate, preserving per-point deltas via index matching."""
         gen_cls = PATTERN_REGISTRY.get(self.state.pattern_type)
         if gen_cls is None:
             return
 
-        # Build lookup: index → old shape (to carry deltas forward)
         old_by_index: dict[int, ShapeInstance] = {
             s.index: s for s in self.state.shapes
         }
 
         new_shapes = gen_cls.generate(self.state)
 
-        # Merge: copy deltas + locked + override_color from matching old shape
         for ns in new_shapes:
             old = old_by_index.get(ns.index)
             if old is not None:
@@ -66,29 +75,26 @@ class App:
 
         self.state.shapes = new_shapes
 
-        # Keep selection valid (ids changed on regen; clear stale selections)
         new_ids = {s.id for s in new_shapes}
         self.selected_ids &= new_ids
 
     def generate(self) -> None:
         """Explicit regeneration with history push."""
-        self.history.push(self.state.shapes)
+        self._push()
         self._generate_silent()
         self._last_pattern_key = self._pattern_key()
 
     # ── Reset helpers ────────────────────────────────────────────────────
 
     def reset_all_deltas(self) -> None:
-        """Reset every point to pattern defaults (clear all deltas)."""
-        self.history.push(self.state.shapes)
+        self._push()
         for s in self.state.shapes:
             s.reset_deltas()
 
     def reset_selected_deltas(self) -> None:
-        """Reset only selected points to pattern defaults."""
         if not self.selected_ids:
             return
-        self.history.push(self.state.shapes)
+        self._push()
         for s in self.state.shapes:
             if s.id in self.selected_ids:
                 s.reset_deltas()
@@ -102,41 +108,51 @@ class App:
                 hit = shape
                 break
 
+        # Compute what the new selection would be
+        new_sel: set[str]
         if hit is None:
-            if not extend:
-                self.selected_ids.clear()
-            return None
-
-        if extend:
-            self.selected_ids |= {hit.id}   # add only, never remove
+            new_sel = set(self.selected_ids) if extend else set()
+        elif extend:
+            new_sel = self.selected_ids | {hit.id}
         else:
-            # If clicking an already-selected shape without shift, keep the
-            # full selection intact so a drag can move all of them.
-            if hit.id not in self.selected_ids:
-                self.selected_ids = {hit.id}
+            new_sel = self.selected_ids if hit.id in self.selected_ids else {hit.id}
+
+        # Only push to history if selection actually changes
+        if frozenset(new_sel) != frozenset(self.selected_ids):
+            self._push_selection()   # records pre-change state
+            self.selected_ids = new_sel
+
         return hit
 
     def selected_shapes(self) -> list[ShapeInstance]:
         return [s for s in self.state.shapes if s.id in self.selected_ids]
 
     def select_all(self) -> None:
-        self.selected_ids = {s.id for s in self.state.shapes}
+        new_sel = {s.id for s in self.state.shapes}
+        if frozenset(new_sel) != frozenset(self.selected_ids):
+            self._push_selection()
+            self.selected_ids = new_sel
 
     def deselect_all(self) -> None:
-        self.selected_ids.clear()
+        if self.selected_ids:
+            self._push_selection()
+            self.selected_ids.clear()
 
     # ── Dragging — writes to delta_position, not base ───────────────────
 
     def begin_drag(self, cx: float, cy: float) -> None:
         self._dragging = True
         self._drag_start = (cx, cy)
-        # Store the effective position at drag start for each draggable selected shape
         self._drag_origins = {
             s.id: s.position
             for s in self.state.shapes
             if s.id in self.selected_ids and not s.locked
         }
-        self.history.push(self.state.shapes)
+        # Capture pre-drag state; only commit to history if something actually moves
+        self._pending_drag_snapshot = Snapshot(
+            shapes=[s.clone() for s in self.state.shapes],
+            selected_ids=frozenset(self.selected_ids),
+        )
 
     def update_drag(self, cx: float, cy: float) -> None:
         if not self._dragging:
@@ -146,11 +162,20 @@ class App:
         for shape in self.state.shapes:
             if shape.id in self._drag_origins:
                 ox, oy = self._drag_origins[shape.id]
-                # Write delta so base_position stays untouched
                 shape.set_effective_position(ox + dx, oy + dy)
 
     def end_drag(self) -> None:
         self._dragging = False
+        # Only commit to history if at least one shape actually moved
+        if self._pending_drag_snapshot is not None:
+            moved = any(
+                s.position != self._drag_origins[s.id]
+                for s in self.state.shapes
+                if s.id in self._drag_origins
+            )
+            if moved:
+                self.history.push_snapshot(self._pending_drag_snapshot)
+        self._pending_drag_snapshot = None
         self._drag_origins.clear()
 
     @property
@@ -160,23 +185,23 @@ class App:
     # ── Undo / Redo ──────────────────────────────────────────────────────
 
     def undo(self) -> None:
-        result = self.history.undo(self.state.shapes)
-        if result is not None:
-            self.state.shapes = result
-            self.selected_ids.clear()
+        snap = self.history.undo(self.state.shapes, self.selected_ids)
+        if snap is not None:
+            self.state.shapes = snap.shapes
+            self.selected_ids = set(snap.selected_ids)
 
     def redo(self) -> None:
-        result = self.history.redo(self.state.shapes)
-        if result is not None:
-            self.state.shapes = result
-            self.selected_ids.clear()
+        snap = self.history.redo(self.state.shapes, self.selected_ids)
+        if snap is not None:
+            self.state.shapes = snap.shapes
+            self.selected_ids = set(snap.selected_ids)
 
     # ── Shape mutations ──────────────────────────────────────────────────
 
     def delete_selected(self) -> None:
         if not self.selected_ids:
             return
-        self.history.push(self.state.shapes)
+        self._push()
         self.state.shapes = [s for s in self.state.shapes if s.id not in self.selected_ids]
         self.selected_ids.clear()
 
