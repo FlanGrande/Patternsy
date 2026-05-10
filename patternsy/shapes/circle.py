@@ -2,19 +2,15 @@ from __future__ import annotations
 
 from PIL import Image, ImageDraw
 
-from patternsy_v2.shapes.base import Shape, register_shape
+from patternsy.shapes.base import Shape, register_shape, circle_vertices
 
 
-@register_shape("square")
-class SquareShape(Shape):
+@register_shape("circle")
+class CircleShape(Shape):
 
     @staticmethod
     def vertices(width: float, height: float) -> list[tuple[float, float]]:
-        # Two triangles forming a quad (for GL_TRIANGLES)
-        return [
-            (-0.5, -0.5), (0.5, -0.5), (0.5, 0.5),
-            (-0.5, -0.5), (0.5, 0.5), (-0.5, 0.5),
-        ]
+        return circle_vertices(64)
 
     @staticmethod
     def rasterize(
@@ -23,5 +19,5 @@ class SquareShape(Shape):
         color: tuple[int, int, int, int],
     ) -> Image.Image:
         img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-        ImageDraw.Draw(img).rectangle([0, 0, width - 1, height - 1], fill=color)
+        ImageDraw.Draw(img).ellipse([0, 0, width - 1, height - 1], fill=color)
         return img

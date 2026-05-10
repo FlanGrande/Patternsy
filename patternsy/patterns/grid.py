@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from patternsy_v2.model import PatternState, ShapeInstance
-from patternsy_v2.patterns.base import PatternGenerator, register_pattern
+from patternsy.model import PatternState, ShapeInstance
+from patternsy.patterns.base import PatternGenerator, register_pattern
 
 
 @register_pattern("grid")

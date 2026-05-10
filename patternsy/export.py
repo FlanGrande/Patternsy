@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from PIL import Image, ImageFilter
 
-from patternsy_v2.model import PatternState, ShapeInstance
-from patternsy_v2.shapes.base import SHAPE_REGISTRY
-from patternsy_v2.tiling import ghost_offsets
+from patternsy.model import PatternState, ShapeInstance
+from patternsy.shapes.base import SHAPE_REGISTRY
+from patternsy.tiling import ghost_offsets
 
 
 def export_pattern(
@@ -59,7 +59,7 @@ def _paste_shape(
 
     # Rasterize
     if shape.shape_type == "custom" and shape.custom_image_path:
-        from patternsy_v2.shapes.custom import CustomShape
+        from patternsy.shapes.custom import CustomShape
         img = CustomShape.rasterize(sw, sh, shape.color, shape.custom_image_path)
     else:
         img = shape_cls.rasterize(sw, sh, shape.color)

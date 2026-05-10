@@ -10,9 +10,9 @@ import sys
 
 from imgui_bundle import imgui, hello_imgui, immapp
 
-from patternsy_v2.app import App
-from patternsy_v2.canvas import CanvasRenderer
-from patternsy_v2.ui.panels import (
+from patternsy.app import App
+from patternsy.canvas import CanvasRenderer
+from patternsy.ui.panels import (
     draw_toolbar,
     draw_pattern_panel,
     draw_canvas_panel,
@@ -20,8 +20,8 @@ from patternsy_v2.ui.panels import (
 )
 
 # Force shape/pattern registration by importing the packages
-import patternsy_v2.shapes  # noqa: F401
-import patternsy_v2.patterns  # noqa: F401
+import patternsy.shapes  # noqa: F401
+import patternsy.patterns  # noqa: F401
 
 
 class PatternsyGui:

@@ -1,16 +1,13 @@
 FROM tobix/pywine:3.10
 
 # Install required Python packages
-RUN wine pip install pyqt6 pyinstaller pillow
+RUN wine pip install imgui-bundle pillow pyinstaller numpy
 
 # Set up working directory
 WORKDIR /app
 
-# Copy application files
-COPY patternsy_ui.py patternsy.py /app/
+# Copy application package
+COPY patternsy/ /app/patternsy/
 
-# Copy the PyInstaller spec file
-COPY patternsy_ui.spec /app/
-
-# Build the executable using the spec file
-CMD wine pyinstaller patternsy_ui.spec
+# Build single-file windowed executable
+CMD wine pyinstaller --onefile --windowed --name patternsy -m patternsy.main

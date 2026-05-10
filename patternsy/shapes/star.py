@@ -4,7 +4,7 @@ import math
 
 from PIL import Image, ImageDraw
 
-from patternsy_v2.shapes.base import Shape, register_shape
+from patternsy.shapes.base import Shape, register_shape
 
 
 def _star_points(n_points: int = 5) -> list[tuple[float, float]]:

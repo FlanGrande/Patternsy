@@ -13,9 +13,9 @@ import numpy as np
 from PIL import Image as PILImage
 from imgui_bundle import imgui, hello_imgui
 
-from patternsy_v2.model import ShapeInstance
-from patternsy_v2.shapes.base import SHAPE_REGISTRY
-from patternsy_v2.tiling import ghost_offsets
+from patternsy.model import ShapeInstance
+from patternsy.shapes.base import SHAPE_REGISTRY
+from patternsy.tiling import ghost_offsets
 
 # ── Color helpers ───────────────────────────────────────────────────────────
 

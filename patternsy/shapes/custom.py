@@ -4,7 +4,7 @@ import os
 
 from PIL import Image
 
-from patternsy_v2.shapes.base import Shape, register_shape
+from patternsy.shapes.base import Shape, register_shape
 
 # Cache: (path, w, h) → Image
 _cache: dict[tuple[str, int, int], Image.Image] = {}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PIL import Image, ImageDraw
 
-from patternsy_v2.shapes.base import Shape, register_shape
+from patternsy.shapes.base import Shape, register_shape
 
 
 @register_shape("triangle")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from patternsy_v2.model import PatternState, ShapeInstance
+from patternsy.model import PatternState, ShapeInstance
 
 
 def save_project(state: PatternState, path: str | Path) -> None:

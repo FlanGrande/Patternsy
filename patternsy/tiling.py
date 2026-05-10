@@ -5,7 +5,7 @@ Used both for viewport ghost rendering and for Pillow export.
 
 from __future__ import annotations
 
-from patternsy_v2.model import ShapeInstance
+from patternsy.model import ShapeInstance
 
 
 def ghost_offsets(

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from patternsy_v2.model import PatternState, ShapeInstance
-from patternsy_v2.history import History
-from patternsy_v2.patterns.base import PATTERN_REGISTRY
+from patternsy.model import PatternState, ShapeInstance
+from patternsy.history import History
+from patternsy.patterns.base import PATTERN_REGISTRY
 
 
 class App:

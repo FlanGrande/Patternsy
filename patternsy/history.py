@@ -5,7 +5,7 @@ Stores snapshots of shape lists. Lightweight for <100 shapes.
 
 from __future__ import annotations
 
-from patternsy_v2.model import ShapeInstance
+from patternsy.model import ShapeInstance
 
 
 class History:

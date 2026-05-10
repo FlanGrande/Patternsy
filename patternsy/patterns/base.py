@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from patternsy_v2.model import PatternState, ShapeInstance
+    from patternsy.model import PatternState, ShapeInstance
 
 PATTERN_REGISTRY: dict[str, type["PatternGenerator"]] = {}
 
@@ -33,7 +33,7 @@ class PatternGenerator(ABC):
         index: int,
     ) -> "ShapeInstance":
         """Create a ShapeInstance at (x, y) with stable index and state defaults as base values."""
-        from patternsy_v2.model import ShapeInstance
+        from patternsy.model import ShapeInstance
         return ShapeInstance(
             index=index,
             base_position=(x, y),

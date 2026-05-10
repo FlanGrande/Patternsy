@@ -5,11 +5,11 @@ from __future__ import annotations
 import os
 from imgui_bundle import imgui, portable_file_dialogs as pfd
 
-from patternsy_v2.app import App
-from patternsy_v2.shapes.base import SHAPE_REGISTRY
-from patternsy_v2.patterns.base import PATTERN_REGISTRY
-from patternsy_v2.serialization import save_project, load_project
-from patternsy_v2.export import export_pattern
+from patternsy.app import App
+from patternsy.shapes.base import SHAPE_REGISTRY
+from patternsy.patterns.base import PATTERN_REGISTRY
+from patternsy.serialization import save_project, load_project
+from patternsy.export import export_pattern
 
 # Track file dialog state
 _save_dialog = None
