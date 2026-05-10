@@ -54,11 +54,17 @@ class PatternGenerator(ABC):
 
         # ── Random rotation ───────────────────────────────────────────────
         # Baked into base_rotation for the same reason.
+        # Distribution: pick a magnitude uniformly from [min_mag, rot_random]
+        # then assign a random sign — this avoids the "unrotated" artifact
+        # where uniform(-max, +max) can land near zero by chance.
         base_rot = state.default_shape_rotation
         rot_random = float(p.get("rotation_random", 0.0))
         if rot_random > 0:
             rng_rot = random.Random(int(p.get("rotation_seed", 0)) ^ (index * 0x7F4A7C15))
-            base_rot += rng_rot.uniform(-rot_random, rot_random)
+            min_mag = max(1.0, rot_random * 0.15)   # at least 15% of max, min 1°
+            magnitude = rng_rot.uniform(min_mag, rot_random)
+            sign = 1 if rng_rot.random() < 0.5 else -1
+            base_rot += sign * magnitude
 
         # ── Random scale ──────────────────────────────────────────────────
         # Baked into base_size.
