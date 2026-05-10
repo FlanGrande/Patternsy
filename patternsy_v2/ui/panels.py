@@ -107,9 +107,17 @@ def draw_pattern_panel(app: App) -> None:
     if changed:
         app.state.default_shape_size = (max(1.0, size[0]), max(1.0, size[1]))
 
-    changed, v = imgui.slider_float("Default Rotation", app.state.default_shape_rotation, 0.0, 360.0)
+    imgui.set_next_item_width(imgui.get_content_region_avail().x - 70)
+    changed, v = imgui.slider_float("##defrot_slider", app.state.default_shape_rotation, 0.0, 360.0)
     if changed:
         app.state.default_shape_rotation = v
+    imgui.same_line()
+    imgui.set_next_item_width(60)
+    changed, v = imgui.input_float("##defrot_input", app.state.default_shape_rotation, 0.0, 0.0, "%.1f")
+    if changed:
+        app.state.default_shape_rotation = v % 360
+    imgui.same_line()
+    imgui.text("Rotation")
 
     col = [c / 255 for c in app.state.default_shape_color]
     changed, col = imgui.color_edit4("Shape Color", col)
@@ -207,13 +215,23 @@ def draw_properties_panel(app: App) -> None:
             imgui.text_disabled(f"  Δ ({ds[0]:+.1f}, {ds[1]:+.1f})")
 
         # ── Rotation ──────────────────────────────────────────────────
-        changed, rot = imgui.slider_float("Rotation", s.rotation % 360, 0.0, 360.0)
+        rot_val = s.rotation % 360
+        imgui.set_next_item_width(imgui.get_content_region_avail().x - 70)
+        changed, rot = imgui.slider_float("##rot_slider", rot_val, 0.0, 360.0)
         if changed:
             app.history.push(app.state.shapes)
             s.set_effective_rotation(rot)
+            rot_val = rot
+        imgui.same_line()
+        imgui.set_next_item_width(60)
+        changed, rot = imgui.input_float("##rot_input", rot_val, 0.0, 0.0, "%.1f")
+        if changed:
+            app.history.push(app.state.shapes)
+            s.set_effective_rotation(rot % 360)
+        imgui.same_line()
+        imgui.text("Rotation")
 
         if s.delta_rotation != 0.0:
-            imgui.same_line()
             imgui.text_disabled(f"  Δ {s.delta_rotation:+.1f}°")
 
         # ── Color ─────────────────────────────────────────────────────
@@ -251,11 +269,22 @@ def draw_properties_panel(app: App) -> None:
 
         imgui.separator()
 
-        # Bulk rotation (shows first selected shape's effective rotation as starting value)
-        changed, rot = imgui.slider_float("Rotation (all)", sel[0].rotation % 360, 0.0, 360.0)
+        # Bulk rotation
+        rot_val = sel[0].rotation % 360
+        imgui.set_next_item_width(imgui.get_content_region_avail().x - 70)
+        changed, rot = imgui.slider_float("##bulkrot_slider", rot_val, 0.0, 360.0)
         if changed:
             app.history.push(app.state.shapes)
             app.set_selected_rotation(rot)
+            rot_val = rot
+        imgui.same_line()
+        imgui.set_next_item_width(60)
+        changed, rot = imgui.input_float("##bulkrot_input", rot_val, 0.0, 0.0, "%.1f")
+        if changed:
+            app.history.push(app.state.shapes)
+            app.set_selected_rotation(rot % 360)
+        imgui.same_line()
+        imgui.text("Rotation (all)")
 
         # Bulk color
         col = [c / 255 for c in sel[0].color]
