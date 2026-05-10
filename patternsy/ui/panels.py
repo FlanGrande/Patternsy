@@ -6,7 +6,7 @@ import os
 from imgui_bundle import imgui, portable_file_dialogs as pfd
 
 from patternsy.app import App
-from patternsy.history import Snapshot
+from patternsy.history import Snapshot, _snap
 from patternsy.shapes.base import SHAPE_REGISTRY
 from patternsy.patterns.base import PATTERN_REGISTRY
 from patternsy.serialization import save_project, load_project
@@ -28,10 +28,7 @@ def _capture_pre_edit(app: App) -> None:
     """Call after drawing a widget: if it just became active, snapshot current state."""
     global _pre_edit
     if imgui.is_item_activated():
-        _pre_edit = Snapshot(
-            shapes=[s.clone() for s in app.state.shapes],
-            selected_ids=frozenset(app.selected_ids),
-        )
+        _pre_edit = _snap(app.state.shapes, app.selected_ids, app.state)
 
 
 def _commit_pre_edit(app: App) -> None:
@@ -80,41 +77,55 @@ def draw_pattern_panel(app: App) -> None:
     """Pattern generator settings panel."""
     imgui.begin("Pattern Settings")
 
-    # Pattern type
+    # Pattern type — discrete, push before change
     pattern_names = list(PATTERN_REGISTRY.keys())
     current_idx = pattern_names.index(app.state.pattern_type) if app.state.pattern_type in pattern_names else 0
     changed, new_idx = imgui.combo("Pattern Type", current_idx, pattern_names)
     if changed:
+        app._push()
         app.state.pattern_type = pattern_names[new_idx]
 
     imgui.separator()
 
-    # Pattern params
+    # Pattern params — input_int can be dragged, use capture/commit
     p = app.state.pattern_params
+
     changed, v = imgui.input_int("Columns", int(p.get("columns", 8)))
+    _capture_pre_edit(app)
     if changed:
         p["columns"] = max(1, v)
+    _commit_pre_edit(app)
+
     changed, v = imgui.input_int("Rows", int(p.get("rows", 8)))
+    _capture_pre_edit(app)
     if changed:
         p["rows"] = max(1, v)
+    _commit_pre_edit(app)
 
     if app.state.pattern_type == "diagonal_grid":
         changed, v = imgui.input_int("Diagonal Offset X", int(p.get("diagonal_offset_x", 0)))
+        _capture_pre_edit(app)
         if changed:
             p["diagonal_offset_x"] = v
+        _commit_pre_edit(app)
 
     if app.state.pattern_type in ("random", "diagonal_grid", "grid", "offset_grid"):
         changed, v = imgui.input_int("Seed", int(p.get("seed", 0)))
+        _capture_pre_edit(app)
         if changed:
             p["seed"] = v
+        _commit_pre_edit(app)
         imgui.same_line()
         if imgui.button("New Seed"):
             import random
+            app._push()
             p["seed"] = random.randint(0, 2**31 - 1)
 
     changed, v = imgui.input_int("Jitter", int(p.get("jitter", 0)))
+    _capture_pre_edit(app)
     if changed:
         p["jitter"] = max(0, v)
+    _commit_pre_edit(app)
 
     imgui.separator()
 
@@ -124,29 +135,38 @@ def draw_pattern_panel(app: App) -> None:
     current_shape_idx = shape_names.index(app.state.default_shape_type) if app.state.default_shape_type in shape_names else 0
     changed, new_shape_idx = imgui.combo("Shape Type", current_shape_idx, shape_names)
     if changed:
+        app._push()
         app.state.default_shape_type = shape_names[new_shape_idx]
 
     size = list(app.state.default_shape_size)
     changed, size = imgui.input_float2("Shape Size", size)
+    _capture_pre_edit(app)
     if changed:
         app.state.default_shape_size = (max(1.0, size[0]), max(1.0, size[1]))
+    _commit_pre_edit(app)
 
     imgui.set_next_item_width(imgui.get_content_region_avail().x - 70)
     changed, v = imgui.slider_float("##defrot_slider", app.state.default_shape_rotation, 0.0, 360.0)
+    _capture_pre_edit(app)
     if changed:
         app.state.default_shape_rotation = v
+    _commit_pre_edit(app)
     imgui.same_line()
     imgui.set_next_item_width(60)
     changed, v = imgui.input_float("##defrot_input", app.state.default_shape_rotation, 0.0, 0.0, "%.1f")
+    _capture_pre_edit(app)
     if changed:
         app.state.default_shape_rotation = v % 360
+    _commit_pre_edit(app)
     imgui.same_line()
     imgui.text("Rotation")
 
     col = [c / 255 for c in app.state.default_shape_color]
     changed, col = imgui.color_edit4("Shape Color", col)
+    _capture_pre_edit(app)
     if changed:
         app.state.default_shape_color = tuple(int(c * 255) for c in col)  # type: ignore
+    _commit_pre_edit(app)
 
     if app.state.default_shape_type == "custom":
         path_text = app.state.default_custom_image_path or "(none)"
@@ -177,16 +197,21 @@ def draw_canvas_panel(app: App) -> None:
 
     cs = list(app.state.canvas_size)
     changed, cs = imgui.input_int2("Canvas Size", cs)
+    _capture_pre_edit(app)
     if changed:
         app.state.canvas_size = (max(1, min(16384, cs[0])), max(1, min(16384, cs[1])))
+    _commit_pre_edit(app)
 
     bg = [c / 255 for c in app.state.bg_color]
     changed, bg = imgui.color_edit4("Background", bg)
+    _capture_pre_edit(app)
     if changed:
         app.state.bg_color = tuple(int(c * 255) for c in bg)  # type: ignore
+    _commit_pre_edit(app)
 
     changed, v = imgui.checkbox("Show Tiling Ghosts", app.state.show_tiling_ghosts)
     if changed:
+        app._push()
         app.state.show_tiling_ghosts = v
 
     imgui.separator()
@@ -286,7 +311,7 @@ def draw_properties_panel(app: App) -> None:
             imgui.spacing()
             imgui.text_colored(imgui.ImVec4(1.0, 0.8, 0.2, 1.0), "* Point has manual edits")
             if imgui.button("Reset This Point"):
-                app.history.push(app.state.shapes, app.selected_ids)
+                app.history.push(app.state.shapes, app.selected_ids, app.state)
                 s.reset_deltas()
 
     else:
@@ -404,5 +429,6 @@ def _process_dialogs(app: App) -> None:
         result = _custom_img_dialog.result()
         if result:
             path = result[0] if isinstance(result, list) else result
+            app._push()
             app.state.default_custom_image_path = path
         _custom_img_dialog = None

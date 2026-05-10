@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import copy
+
 from patternsy.model import PatternState, ShapeInstance
-from patternsy.history import History, Snapshot
+from patternsy.history import History, Snapshot, _snap
 from patternsy.patterns.base import PATTERN_REGISTRY
 
 
@@ -18,15 +20,32 @@ class App:
         self._pending_drag_snapshot: Snapshot | None = None
         self._last_pattern_key: object = None
 
-    # ── Internal snapshot helper ─────────────────────────────────────────
+    # ── Internal snapshot helpers ────────────────────────────────────────
 
     def _push(self) -> None:
-        """Push the current shapes + selection to history before a mutation."""
-        self.history.push(self.state.shapes, self.selected_ids)
+        """Push the current full state to history before a mutation."""
+        self.history.push(self.state.shapes, self.selected_ids, self.state)
 
     def _push_selection(self) -> None:
         """Push current state to record a selection-only change."""
-        self.history.push(self.state.shapes, self.selected_ids)
+        self.history.push(self.state.shapes, self.selected_ids, self.state)
+
+    def _restore_snapshot(self, snap: Snapshot) -> None:
+        """Apply a snapshot back to app state."""
+        self.state.shapes = snap.shapes
+        self.selected_ids = set(snap.selected_ids)
+        self.state.canvas_size = snap.canvas_size
+        self.state.bg_color = snap.bg_color
+        self.state.pattern_type = snap.pattern_type
+        self.state.pattern_params = copy.deepcopy(snap.pattern_params)
+        self.state.default_shape_type = snap.default_shape_type
+        self.state.default_shape_size = snap.default_shape_size
+        self.state.default_shape_color = snap.default_shape_color
+        self.state.default_shape_rotation = snap.default_shape_rotation
+        self.state.default_custom_image_path = snap.default_custom_image_path
+        self.state.show_tiling_ghosts = snap.show_tiling_ghosts
+        # Prevent tick() from immediately re-generating on top of the restored state
+        self._last_pattern_key = self._pattern_key()
 
     # ── Pattern generation ──────────────────────────────────────────────
 
@@ -108,7 +127,6 @@ class App:
                 hit = shape
                 break
 
-        # Compute what the new selection would be
         new_sel: set[str]
         if hit is None:
             new_sel = set(self.selected_ids) if extend else set()
@@ -117,9 +135,8 @@ class App:
         else:
             new_sel = self.selected_ids if hit.id in self.selected_ids else {hit.id}
 
-        # Only push to history if selection actually changes
         if frozenset(new_sel) != frozenset(self.selected_ids):
-            self._push_selection()   # records pre-change state
+            self._push_selection()
             self.selected_ids = new_sel
 
         return hit
@@ -138,7 +155,7 @@ class App:
             self._push_selection()
             self.selected_ids.clear()
 
-    # ── Dragging — writes to delta_position, not base ───────────────────
+    # ── Dragging ─────────────────────────────────────────────────────────
 
     def begin_drag(self, cx: float, cy: float) -> None:
         self._dragging = True
@@ -148,11 +165,7 @@ class App:
             for s in self.state.shapes
             if s.id in self.selected_ids and not s.locked
         }
-        # Capture pre-drag state; only commit to history if something actually moves
-        self._pending_drag_snapshot = Snapshot(
-            shapes=[s.clone() for s in self.state.shapes],
-            selected_ids=frozenset(self.selected_ids),
-        )
+        self._pending_drag_snapshot = _snap(self.state.shapes, self.selected_ids, self.state)
 
     def update_drag(self, cx: float, cy: float) -> None:
         if not self._dragging:
@@ -166,7 +179,6 @@ class App:
 
     def end_drag(self) -> None:
         self._dragging = False
-        # Only commit to history if at least one shape actually moved
         if self._pending_drag_snapshot is not None:
             moved = any(
                 s.position != self._drag_origins[s.id]
@@ -185,16 +197,14 @@ class App:
     # ── Undo / Redo ──────────────────────────────────────────────────────
 
     def undo(self) -> None:
-        snap = self.history.undo(self.state.shapes, self.selected_ids)
+        snap = self.history.undo(self.state.shapes, self.selected_ids, self.state)
         if snap is not None:
-            self.state.shapes = snap.shapes
-            self.selected_ids = set(snap.selected_ids)
+            self._restore_snapshot(snap)
 
     def redo(self) -> None:
-        snap = self.history.redo(self.state.shapes, self.selected_ids)
+        snap = self.history.redo(self.state.shapes, self.selected_ids, self.state)
         if snap is not None:
-            self.state.shapes = snap.shapes
-            self.selected_ids = set(snap.selected_ids)
+            self._restore_snapshot(snap)
 
     # ── Shape mutations ──────────────────────────────────────────────────
 
