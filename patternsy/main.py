@@ -129,7 +129,8 @@ class PatternsyGui:
         self._box_end: tuple[float, float] = (0.0, 0.0)
 
     def run(self) -> None:
-        runner_params = hello_imgui.RunnerParams()
+        self._runner_params = hello_imgui.RunnerParams()
+        runner_params = self._runner_params
         runner_params.app_window_params.window_title = "Patternsy"
         runner_params.app_window_params.window_geometry.size = (1400, 900)
         runner_params.imgui_window_params.show_menu_bar = True
@@ -138,8 +139,14 @@ class PatternsyGui:
         )
         runner_params.docking_params = self._docking_layout()
         runner_params.callbacks.show_gui   = self._gui
-        runner_params.callbacks.show_menus = lambda: draw_toolbar(self.app)
+        runner_params.callbacks.show_menus = lambda: draw_toolbar(self.app, runner_params)
+        # Clear GPU textures before the GL context is destroyed
+        runner_params.callbacks.before_exit = self._on_exit
         immapp.run(runner_params)
+
+    def _on_exit(self) -> None:
+        from patternsy.canvas import clear_texture_cache
+        clear_texture_cache()
 
     def _docking_layout(self) -> hello_imgui.DockingParams:
         dp = hello_imgui.DockingParams()

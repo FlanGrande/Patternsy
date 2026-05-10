@@ -39,7 +39,7 @@ def _commit_pre_edit(app: App) -> None:
         _pre_edit = None
 
 
-def draw_toolbar(app: App) -> None:
+def draw_toolbar(app: App, runner_params=None) -> None:
     """Menu items (called inside hello_imgui's menu bar context)."""
     if imgui.begin_menu("File"):
         if imgui.menu_item("Save Project", "Ctrl+S", False, True)[0]:
@@ -51,8 +51,11 @@ def draw_toolbar(app: App) -> None:
             _start_export_dialog(app)
         imgui.separator()
         if imgui.menu_item("Quit", "Ctrl+Q", False, True)[0]:
-            import sys
-            sys.exit(0)
+            if runner_params is not None:
+                runner_params.app_shall_exit = True
+            else:
+                import sys
+                sys.exit(0)
         imgui.end_menu()
 
     if imgui.begin_menu("Edit"):
