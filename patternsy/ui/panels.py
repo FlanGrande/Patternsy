@@ -109,26 +109,30 @@ def draw_pattern_panel(app: App) -> None:
             p["diagonal_offset_x"] = v
         _commit_pre_edit(app)
 
-    if app.state.pattern_type in ("random", "diagonal_grid", "grid", "offset_grid"):
-        changed, v = imgui.input_int("Seed", int(p.get("seed", 0)))
-        _capture_pre_edit(app)
-        if changed:
-            p["seed"] = v
-        _commit_pre_edit(app)
-        imgui.same_line()
-        if imgui.button("New Seed"):
-            import random
-            app._push()
-            p["seed"] = random.randint(0, 2**31 - 1)
+    imgui.separator()
+    imgui.text("Randomization:")
 
+    # ── Jitter ────────────────────────────────────────────────────────────
     changed, v = imgui.input_int("Jitter", int(p.get("jitter", 0)))
     _capture_pre_edit(app)
     if changed:
         p["jitter"] = max(0, v)
     _commit_pre_edit(app)
 
-    imgui.separator()
-    imgui.text("Randomization:")
+    changed, v = imgui.input_int("##jitterseed", int(p.get("seed", 0)))
+    _capture_pre_edit(app)
+    if changed:
+        p["seed"] = v
+    _commit_pre_edit(app)
+    imgui.same_line()
+    if imgui.button("New##jitterseed"):
+        import random as _rnd
+        app._push()
+        p["seed"] = _rnd.randint(0, 2**31 - 1)
+    imgui.same_line()
+    imgui.text("Jitter Seed")
+
+    imgui.spacing()
 
     # ── Random Rotation ──────────────────────────────────────────────────
     rot_r = float(p.get("rotation_random", 0.0))
